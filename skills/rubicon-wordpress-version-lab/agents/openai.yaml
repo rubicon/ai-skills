@@ -1,0 +1,5 @@
+interface:
+  display_name: Rubicon WordPress Version Lab
+  short_description: Build Docker-only WordPress version labs on an SSH-reachable host (e.g. a Synology NAS) over SSH.
+  icon: 🧪
+  brand_color: '#1f6feb'
