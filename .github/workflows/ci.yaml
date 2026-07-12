@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate-skills:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate skill and plugin structure
+        run: bash scripts/validate-skills.sh
+
+  validate-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: identity-theft output-gate test suite
+        run: |
+          cd skills/identity-theft/scripts/tests
+          python3 -m unittest -v
+      - name: identity-theft dossier roster gate
+        run: |
+          python3 skills/identity-theft/scripts/validate_dossier.py \
+            skills/identity-theft/references/personalities/
+
+  validate-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check branch name
+        env:
+          BRANCH: ${{ github.head_ref }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          # Trusted-automation exemption: Dependabot and release-please branches
+          # do not follow dev/<issue>-<slug>. Pass them through.
+          case "$BRANCH" in
+            dependabot/*|release-please--*)
+              echo "Trusted automation branch ($BRANCH); branch-name check skipped."
+              exit 0 ;;
+          esac
+          echo "Source branch: $BRANCH"
+          if ! printf '%s' "$BRANCH" | grep -qE '^dev/[0-9]+-[a-z0-9._-]+$'; then
+            echo "FAIL: branch '$BRANCH' must match dev/<issue-number>-<short-kebab-description>"
+            exit 1
+          fi
+          echo "Branch name OK."
+      - name: Check semantic commit prefixes
+        env:
+          ACTOR: ${{ github.actor }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          case "$ACTOR" in
+            dependabot[bot]|*release-please*)
+              echo "Trusted automation actor ($ACTOR); commit-prefix check skipped."
+              exit 0 ;;
+          esac
+          base="$BASE_SHA"
+          head="$HEAD_SHA"
+          echo "Range: $base..$head"
+          fail=0
+          while IFS= read -r subject; do
+            [ -z "$subject" ] && continue
+            if ! printf '%s' "$subject" | grep -qE '^(feat|fix|chore|docs|test|ci|refactor|build|perf|revert|style)(\([a-z0-9 ./_-]+\))?!?: .+'; then
+              echo "FAIL: non-semantic commit subject: $subject"
+              fail=1
+            fi
+          done < <(git log --no-merges --format=%s "$base..$head")
+          if [ "$fail" -ne 0 ]; then exit 1; fi
+          echo "Commit prefixes OK."

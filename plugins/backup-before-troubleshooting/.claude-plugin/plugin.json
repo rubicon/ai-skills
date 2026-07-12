@@ -1,0 +1,8 @@
+{
+  "name": "backup-before-troubleshooting",
+  "version": "0.1.0",
+  "description": "Stand up a dated, self-documenting recovery workspace before changing system, app, or config state, so every change is reversible and the whole effort can be forensically reconstructed later.",
+  "author": { "name": "Dax Davis" },
+  "homepage": "https://git.daxdavis.com/rubicon/ai-skills",
+  "license": "MIT"
+}
