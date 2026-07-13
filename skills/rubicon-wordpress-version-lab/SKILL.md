@@ -1,6 +1,6 @@
 ---
 name: rubicon-wordpress-version-lab
-version: 1.0.0
+version: 1.0.0  # x-release-please-version
 description: >-
   Use when the user wants to create, list, stop, remove, or troubleshoot
   isolated Docker-only WordPress version test labs on an SSH-reachable host

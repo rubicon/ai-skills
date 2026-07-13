@@ -50,7 +50,7 @@ for dir in skills/*/; do
   printf '%s\n' "$fm" | grep -qE '^name:[[:space:]]*[^[:space:]]'        || err "$name: frontmatter missing 'name'"
   printf '%s\n' "$fm" | grep -qE '^description:'                          || err "$name: frontmatter missing 'description'"
 
-  ver=$(printf '%s\n' "$fm" | grep -E '^version:' | head -1 | sed -E "s/^version:[[:space:]]*//; s/[\"' ]//g")
+  ver=$(printf '%s\n' "$fm" | grep -E '^version:' | head -1 | sed -E "s/[[:space:]]*#.*$//; s/^version:[[:space:]]*//; s/[\"' ]//g")
   if [ -n "$ver" ] && ! printf '%s' "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
     err "$name: version '$ver' is not SemVer (MAJOR.MINOR.PATCH)"
   fi
