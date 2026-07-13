@@ -8,7 +8,7 @@ description: >-
   Sherlock Holmes, or any of the 51 personalities in references/personalities/),
   or to create a character-voiced easter-egg README.
 author: Dax Davis
-version: 0.1.0
+version: 0.1.0  # x-release-please-version
 ---
 
 # identity-theft

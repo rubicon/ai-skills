@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "packages": {
+    ".": {
+      "package-name": "ai-skills",
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md"
+    },
+    "skills/secret-santa-generator": {
+      "package-name": "secret-santa-generator",
+      "extra-files": ["SKILL.md"]
+    },
+    "skills/work-evidence-research": {
+      "package-name": "work-evidence-research",
+      "extra-files": ["SKILL.md"]
+    },
+    "skills/rubicon-wordpress-version-lab": {
+      "package-name": "rubicon-wordpress-version-lab",
+      "extra-files": ["SKILL.md"]
+    },
+    "skills/identity-theft": {
+      "package-name": "identity-theft",
+      "extra-files": ["SKILL.md"]
+    },
+    "plugins/backup-before-troubleshooting": {
+      "package-name": "backup-before-troubleshooting",
+      "extra-files": [
+        { "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" }
+      ]
+    }
+  }
+}
