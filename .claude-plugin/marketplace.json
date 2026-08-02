@@ -1,0 +1,11 @@
+{
+  "name": "rubicon",
+  "owner": { "name": "Rubicon AI" },
+  "plugins": [
+    {
+      "name": "backup-before-troubleshooting",
+      "source": "./plugins/backup-before-troubleshooting",
+      "description": "Stand up a dated, self-documenting recovery workspace before changing system/app/config state, so every change is reversible and the whole effort can be forensically reconstructed later."
+    }
+  ]
+}
