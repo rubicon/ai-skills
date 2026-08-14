@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Load release-please App credentials from 1Password
         id: op
-        uses: 1password/load-secrets-action@v5
+        uses: 1password/load-secrets-action@e544b780808654ba8ceba5fb2fe2897103d92ff4 # v5
         with:
           export-env: false
         env:
@@ -26,13 +26,13 @@ jobs:
 
       - name: Mint GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           app-id: ${{ steps.op.outputs.RP_APP_ID }}
           private-key: ${{ steps.op.outputs.RP_PRIVATE_KEY }}
 
       - name: Run release-please
-        uses: googleapis/release-please-action@v5
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json

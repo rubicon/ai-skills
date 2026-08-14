@@ -33,6 +33,10 @@ for dir in skills/*/; do
   found=1
   name=$(basename "$dir")
 
+  # Directory name is the skill's invocation name; it must be kebab-case.
+  printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$' \
+    || err "$name: skill directory name must be kebab-case (lowercase, digits, single hyphens)"
+
   for req in SKILL.md README.md CHANGELOG.md; do
     [ -f "${dir}${req}" ] || err "$name: missing $req"
   done
@@ -47,13 +51,89 @@ for dir in skills/*/; do
     continue
   fi
 
-  printf '%s\n' "$fm" | grep -qE '^name:[[:space:]]*[^[:space:]]'        || err "$name: frontmatter missing 'name'"
-  printf '%s\n' "$fm" | grep -qE '^description:'                          || err "$name: frontmatter missing 'description'"
+  # Parse the frontmatter as real YAML. Checking with grep alone lets malformed
+  # frontmatter (unclosed flow sequences, tab indentation, duplicate keys) pass
+  # here and then fail wherever the skill is actually loaded.
+  # The frontmatter travels in an env var: the heredoc already occupies stdin
+  # (it is the Python program), so a pipe here would be discarded.
+  SKILL_FRONTMATTER="$fm" python3 - "$name" <<'PY' || fail=1
+import os, re, sys
 
-  ver=$(printf '%s\n' "$fm" | grep -E '^version:' | head -1 | sed -E "s/[[:space:]]*#.*$//; s/^version:[[:space:]]*//; s/[\"' ]//g")
-  if [ -n "$ver" ] && ! printf '%s' "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-    err "$name: version '$ver' is not SemVer (MAJOR.MINOR.PATCH)"
-  fi
+name = sys.argv[1]
+text = os.environ["SKILL_FRONTMATTER"]
+
+try:
+    import yaml
+except ImportError:
+    print("FAIL: PyYAML is required to validate SKILL.md frontmatter "
+          "(pip install pyyaml)", file=sys.stderr)
+    sys.exit(1)
+
+
+class Strict(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate mapping keys instead of silently
+    keeping the last one."""
+
+
+def _no_duplicates(loader, node, deep=False):
+    seen = set()
+    for key_node, _ in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in seen:
+            raise yaml.YAMLError(f"duplicate key {key!r}")
+        seen.add(key)
+    return yaml.SafeLoader.construct_mapping(loader, node, deep)
+
+
+Strict.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_duplicates
+)
+
+try:
+    # Strict subclasses SafeLoader, so this is safe_load semantics plus the
+    # duplicate-key check above — no arbitrary object construction.
+    data = yaml.load(text, Loader=Strict)
+except yaml.YAMLError as e:
+    detail = str(e).replace("\n", " ")
+    print(f"FAIL: {name}: SKILL.md frontmatter is not valid YAML ({detail})",
+          file=sys.stderr)
+    sys.exit(1)
+
+if not isinstance(data, dict):
+    print(f"FAIL: {name}: SKILL.md frontmatter must be a YAML mapping",
+          file=sys.stderr)
+    sys.exit(1)
+
+ok = True
+
+value = data.get("name")
+if not isinstance(value, str) or not value.strip():
+    print(f"FAIL: {name}: frontmatter missing 'name'", file=sys.stderr)
+    ok = False
+
+if "description" not in data:
+    print(f"FAIL: {name}: frontmatter missing 'description'", file=sys.stderr)
+    ok = False
+else:
+    value = data["description"]
+    if not isinstance(value, str) or not value.strip():
+        print(f"FAIL: {name}: frontmatter 'description' must be a non-empty string",
+              file=sys.stderr)
+        ok = False
+
+if "version" in data and data["version"] is not None:
+    # A bare 1.0 parses as a float, so compare on the raw text to report what
+    # the author actually wrote.
+    raw = re.search(r"^version:[ \t]*(.*)$", text, re.MULTILINE)
+    version = raw.group(1) if raw else str(data["version"])
+    version = re.sub(r"[ \t]*#.*$", "", version).strip().strip("\"'")
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+        print(f"FAIL: {name}: version '{version}' is not SemVer (MAJOR.MINOR.PATCH)",
+              file=sys.stderr)
+        ok = False
+
+sys.exit(0 if ok else 1)
+PY
 done
 
 [ "$found" -eq 1 ] || err "no skill directories found under skills/"
