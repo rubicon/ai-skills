@@ -1,0 +1,48 @@
+name: Propose a personality
+description: Suggest a new personality for the identity-theft skill
+title: "feat(identity-theft): add <personality> personality"
+labels: ["personality", "identity-theft"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a personality. Please skim
+        [`references/dossier-contract.md`](../../skills/identity-theft/references/dossier-contract.md)
+        first — dossiers must follow it exactly.
+  - type: input
+    id: display-name
+    attributes:
+      label: Character / display name
+      placeholder: e.g. Sherlock Holmes
+    validations:
+      required: true
+  - type: input
+    id: id
+    attributes:
+      label: Dossier id (kebab-case, becomes the filename and suffix source)
+      placeholder: e.g. sherlock-holmes
+    validations:
+      required: true
+  - type: textarea
+    id: voice
+    attributes:
+      label: What makes this voice distinctive?
+      description: Sentence rhythm, diction, worldview, signature structures — the more concrete, the better. Not adjectives.
+    validations:
+      required: true
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Ground rules
+      options:
+        - label: I will capture the character as abstract style, not by copying canonical quotes or catchphrases.
+          required: true
+        - label: The personality changes tone only — it will not alter facts, instructions, or code.
+          required: true
+        - label: The character is publishable (no slurs, no targeting real people/groups, no written profanity).
+          required: true
+  - type: input
+    id: contributor
+    attributes:
+      label: Will you write the dossier yourself?
+      placeholder: "Yes / I'd like someone else to pick it up"
