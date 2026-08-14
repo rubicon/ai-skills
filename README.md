@@ -20,7 +20,6 @@ skillshare install github.com/rubicon/ai-skills --track
 skillshare install github.com/rubicon/ai-skills -s secret-santa-generator
 skillshare install github.com/rubicon/ai-skills -s work-evidence-research
 skillshare install github.com/rubicon/ai-skills -s rubicon-wordpress-version-lab
-skillshare install github.com/rubicon/ai-skills -s cache-money
 ```
 
 ## Skills
@@ -31,4 +30,14 @@ skillshare install github.com/rubicon/ai-skills -s cache-money
 | [work-evidence-research](skills/work-evidence-research/SKILL.md) | Forensic, source-grounded research for reconstructing work history and client proof from connected files (discovery, targeted verification, final assembly) |
 | [rubicon-wordpress-version-lab](skills/rubicon-wordpress-version-lab/SKILL.md) | Create and manage isolated Docker-only WordPress version test labs on an SSH-reachable host (e.g. a Synology NAS) via docker compose |
 | [identity-theft](skills/identity-theft/SKILL.md) | Steals fictional identities, not personal data — rewrites your text, Markdown, or HTML in a character's voice (Ron Swanson, Yoda, pirate, and 48 more) while code, links, and facts survive untouched |
-| [cache-money](skills/cache-money/SKILL.md) | Token and context management practices for Claude Code sessions — session hygiene, CLAUDE.md discipline, model selection, and cost control |
+| [cache-money](skills/cache-money/SKILL.md) | Keep Claude Code sessions cheap and sharp — session hygiene, `CLAUDE.md` discipline, native auto-compaction controls, model selection, and context-cost habits |
+
+## Contributing
+
+Contributions are welcome — especially new **personalities** for the
+[identity-theft](skills/identity-theft/SKILL.md) skill, which is the easiest way
+to contribute (one self-contained file). See [CONTRIBUTING.md](CONTRIBUTING.md)
+to get started, and [ARCHITECTURE.md](ARCHITECTURE.md) for how the repo is laid
+out. By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+![Contributors](https://contrib.rocks/image?repo=rubicon/ai-skills)

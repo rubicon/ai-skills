@@ -1,6 +1,6 @@
 ---
 name: work-evidence-research
-version: 1.0.0
+version: 1.0.0  # x-release-please-version
 author: Dax Davis
 targets: [claude, cursor]
 description: >-
