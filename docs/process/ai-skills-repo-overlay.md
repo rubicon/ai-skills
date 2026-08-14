@@ -64,7 +64,7 @@ Each plugin is listed in the repo-root marketplace manifest `.claude-plugin/mark
 
 ## Verification
 
-The baseline check is `bash scripts/validate-skills.sh` (structure + frontmatter + SemVer); it also runs in CI on pull requests via `.forgejo/workflows/ci.yaml`. Before merging a change that adds or modifies a skill, also confirm by hand:
+The baseline check is `bash scripts/validate-skills.sh` (structure + frontmatter + SemVer); it also runs in CI on pull requests via `.github/workflows/ci.yaml`. Before merging a change that adds or modifies a skill, also confirm by hand:
 
 - Confirm the skill lives at `skills/<skill-name>/SKILL.md`, with a `README.md` and `CHANGELOG.md` alongside it.
 - Confirm `SKILL.md` has valid YAML frontmatter with `name` and `description`, and a SemVer `version`.

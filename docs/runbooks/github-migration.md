@@ -53,9 +53,17 @@ secret-leak remediation.
 4. Initialize a fresh git history from the clean tree (new repo or orphan
    branch), single **signed** initial commit:
    `chore: initial public release of ai-skills` (or a dated release commit).
-5. Force-push to `github.com/rubicon/ai-skills` `main`, replacing the current
-   snapshot. This is the last force-push to that repo — after this, `main` is
-   protected and append-only.
+5. ~~Force-push to `github.com/rubicon/ai-skills` `main`, replacing the current
+   snapshot.~~ **COMPLETED 2026-07-13 — do not repeat.** This was the last
+   force-push to that repo; `main` is now protected and append-only
+   (`allow_force_pushes: false`, `enforce_admins: true`,
+   `required_linear_history: true`).
+
+   > **Never force-push this repo again.** On 2026-08-02 a snapshot force-push
+   > from the retired Forgejo mirror tooling overwrote `main` and destroyed CI,
+   > release automation, and the contribution docs. Recovery refs:
+   > `pre-incident-2026-07-13` and `snapshot-2026-08-02`. Restore work is
+   > tracked in #6. Any future content change goes through a normal PR.
 
 ### Phase C — Harden GitHub `main` (Repository Provisioning Baseline)
 
