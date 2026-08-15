@@ -8,6 +8,7 @@ Versions use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `rubicon-marketing-board` plugin listed as an external GitHub source (pinned to `v0.1.1`) — first marketplace entry sourced from a separate repo rather than vendored under `plugins/`
 - `cache-money` skill (v1.1.0) — Claude Code token/context-management practices for cheaper, sharper sessions
 - `identity-theft` skill (v0.1.0) — multi-personality text converter that rewrites text in a fictional character's voice
 - `backup-before-troubleshooting` plugin (v0.1.0) — a recoverable, self-documenting troubleshooting discipline: a bundled skill (single source of truth for the safety rules), three lifecycle commands (`new-recovery-effort`, `recovery-status`, gated `cleanup`), and one seeding script; first plugin in the new `plugins/` tree
