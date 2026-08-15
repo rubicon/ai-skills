@@ -36,7 +36,7 @@ Examples for this repository:
 
 Skills must use the directory-based format:
 
-```
+```text
 skills/<skill-name>/SKILL.md        # required — skill definition
 skills/<skill-name>/README.md       # required — thin human-facing overview + install
 skills/<skill-name>/CHANGELOG.md    # required — per-skill version history (Keep a Changelog)
@@ -50,7 +50,7 @@ The `version:` field in `SKILL.md` uses full SemVer (`MAJOR.MINOR.PATCH`). The r
 
 Claude Code plugins use the plugin format and are an independent tree from `skills/`:
 
-```
+```text
 plugins/<plugin-name>/.claude-plugin/plugin.json   # required — manifest (name; SemVer version when present)
 plugins/<plugin-name>/README.md                    # required — thin human-facing overview + install
 plugins/<plugin-name>/CHANGELOG.md                 # required — per-plugin version history (Keep a Changelog)

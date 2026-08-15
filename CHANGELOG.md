@@ -8,8 +8,8 @@ Versions use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- `cache-money` skill (v1.1.0) — Claude Code token/context-management practices across three tiers (session hygiene, project-level hygiene, advanced cost control), including native `/autocompact` and auto-compaction env-var controls and a `# Compact instructions` template
-- `identity-theft` skill (v0.1.0) — multi-personality text converter: rewrites text/Markdown/HTML in a fictional character's voice with a 51-personality roster, a fail-closed structural output gate, and a dossier roster validator
+- `cache-money` skill (v1.1.0) — Claude Code token/context-management practices for cheaper, sharper sessions
+- `identity-theft` skill (v0.1.0) — multi-personality text converter that rewrites text in a fictional character's voice
 - `backup-before-troubleshooting` plugin (v0.1.0) — a recoverable, self-documenting troubleshooting discipline: a bundled skill (single source of truth for the safety rules), three lifecycle commands (`new-recovery-effort`, `recovery-status`, gated `cleanup`), and one seeding script; first plugin in the new `plugins/` tree
 - Plugin hosting: the repo can now host Claude Code plugins under `plugins/` alongside `skills/`, with a root `.claude-plugin/marketplace.json` marketplace manifest (`rubicon`); `validate-skills.sh` and the GitHub-mirror allowlist now cover plugins and the marketplace
 - `rubicon-wordpress-version-lab` skill — create/list/stop/remove Docker-only WordPress version labs on an SSH-reachable host; public and config-driven (no committed personal infrastructure)
