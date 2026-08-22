@@ -1,6 +1,6 @@
 ---
 name: cache-money
-version: 1.1.0  # x-release-please-version
+version: 1.1.1  # x-release-please-version
 description: >-
   Use when a Claude Code session is burning through tokens fast, hitting
   usage limits, degrading in quality after a long conversation, or someone
