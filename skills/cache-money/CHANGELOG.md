@@ -4,6 +4,13 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
+## [1.1.1](https://github.com/rubicon/ai-skills/compare/cache-money-v1.1.0...cache-money-v1.1.1) (2026-08-24)
+
+
+### Bug Fixes
+
+* restore canonical contents overwritten by mirror snapshot, port cache-money ([#7](https://github.com/rubicon/ai-skills/issues/7)) ([4c32275](https://github.com/rubicon/ai-skills/commit/4c32275c02459353e56f7ee365e7f1f166284b97)), closes [#6](https://github.com/rubicon/ai-skills/issues/6)
+
 ## [Unreleased]
 
 ## [1.1.0] — 2026-08-05
