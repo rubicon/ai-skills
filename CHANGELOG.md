@@ -8,6 +8,7 @@ Versions use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `session-messaging` plugin (v0.1.0) — cross-session messaging for Claude Code Desktop (CCD): a bundled skill covering `mcp__ccd_session_mgmt__send_message` addressing and session self-identification, plus two commands (`session-whoami`, `session-send`)
 - `rubicon-marketing-board` plugin listed as an external GitHub source (pinned to `v0.1.1`) — first marketplace entry sourced from a separate repo rather than vendored under `plugins/`
 - `cache-money` skill (v1.1.0) — Claude Code token/context-management practices for cheaper, sharper sessions
 - `identity-theft` skill (v0.1.0) — multi-personality text converter that rewrites text in a fictional character's voice
