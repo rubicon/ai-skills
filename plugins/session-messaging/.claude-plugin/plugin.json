@@ -1,0 +1,8 @@
+{
+  "name": "session-messaging",
+  "version": "0.1.0",
+  "description": "Cross-session messaging for Claude Code Desktop (CCD): how sessions message each other via mcp__ccd_session_mgmt__send_message and how a session reports its own address.",
+  "author": { "name": "Dax Davis" },
+  "homepage": "https://github.com/rubicon/ai-skills",
+  "license": "MIT"
+}

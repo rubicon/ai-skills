@@ -8,6 +8,11 @@
       "description": "Stand up a dated, self-documenting recovery workspace before changing system/app/config state, so every change is reversible and the whole effort can be forensically reconstructed later."
     },
     {
+      "name": "session-messaging",
+      "source": "./plugins/session-messaging",
+      "description": "Cross-session messaging for Claude Code Desktop (CCD): how sessions message each other via mcp__ccd_session_mgmt__send_message and how a session reports its own address."
+    },
+    {
       "name": "rubicon-marketing-board",
       "source": {
         "source": "github",
