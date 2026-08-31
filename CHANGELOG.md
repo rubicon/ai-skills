@@ -5,6 +5,21 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [1.1.0](https://github.com/rubicon/ai-skills/compare/v1.0.0...v1.1.0) (2026-08-31)
+
+
+### Features
+
+* add session-messaging plugin for CCD cross-session messaging ([#24](https://github.com/rubicon/ai-skills/issues/24)) ([6cfd326](https://github.com/rubicon/ai-skills/commit/6cfd32688dff5706db9d8d84b7f158021222ec59)), closes [#23](https://github.com/rubicon/ai-skills/issues/23)
+* list rubicon-marketing-board as an external plugin source ([#13](https://github.com/rubicon/ai-skills/issues/13)) ([b397afb](https://github.com/rubicon/ai-skills/commit/b397afb1d2916834de8b4389cc8f8be26653b134)), closes [#12](https://github.com/rubicon/ai-skills/issues/12)
+
+
+### Bug Fixes
+
+* correct 1Password item reference in release-please workflow ([#15](https://github.com/rubicon/ai-skills/issues/15)) ([eda7184](https://github.com/rubicon/ai-skills/commit/eda71841a219dd39875f43841c18583ab1e365e0))
+* parse SKILL.md frontmatter as YAML, pin actions, polish docs ([#10](https://github.com/rubicon/ai-skills/issues/10)) ([3408699](https://github.com/rubicon/ai-skills/commit/34086995ae1e44b147eb112aab99d045af84d2a1))
+* restore canonical contents overwritten by mirror snapshot, port cache-money ([#7](https://github.com/rubicon/ai-skills/issues/7)) ([4c32275](https://github.com/rubicon/ai-skills/commit/4c32275c02459353e56f7ee365e7f1f166284b97)), closes [#6](https://github.com/rubicon/ai-skills/issues/6)
+
 ## [Unreleased]
 
 ### Added
