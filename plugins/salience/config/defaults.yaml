@@ -1,0 +1,105 @@
+# Salience defaults. Copy to $SALIENCE_HOME/config.yaml to override.
+# Nothing here is personal; the private store lives outside this repository.
+
+store:
+  # Root for all personal state. Never inside the repo.
+  path: "${SALIENCE_HOME:-~/.claude/salience}"
+
+profile:
+  default_mode: standard          # quick | standard | deep
+  # Escalate to deep without asking when these are true.
+  auto_deep_when:
+    - active_executive_search
+    - launching_consulting_practice
+  headline_char_target: 220
+  about_word_target: [200, 300]
+  about_hook_char_limit: 265      # mobile "see more" cutoff
+  featured_item_target: 3
+  skills_target: 50
+  recommendations_target: 3
+
+scoring:
+  # Component weights by goal, used for the weighted total in the audit.
+  # Rationale is in skills/salience-profile/references/scorecard.md.
+  weights:
+    executive_search:
+      headline: 3
+      about: 3
+      experience: 3
+      featured: 1
+      skills: 2
+      recommendations: 2
+      photo: 1
+      banner: 1
+      custom_url: 1
+    consulting:
+      headline: 3
+      about: 3
+      experience: 2
+      featured: 3
+      skills: 1
+      recommendations: 2
+      photo: 1
+      banner: 2
+      custom_url: 1
+    authority:
+      headline: 2
+      about: 3
+      experience: 1
+      featured: 3
+      skills: 1
+      recommendations: 1
+      photo: 1
+      banner: 2
+      custom_url: 1
+
+content:
+  pillar_count: [3, 5]
+  pillar_mix:
+    domain_authority: [0.40, 0.50]
+    leadership_judgment: [0.20, 0.30]
+    point_of_view: [0.15, 0.25]
+    human: [0.10, 0.15]
+  post_char_sweet_spot: [700, 1300]
+  hook_char_limit: 210            # mobile fold
+  # Recommend the cadence the user will keep, not the maximum.
+  default_cadence_per_week: 2
+
+engage:
+  comment_char_target: [200, 350]
+  connection_note_char_limit: 300
+  outreach_followups_max: 1       # one follow-up, then stop
+
+governance:
+  # Every external action is gated. There is no approve-all.
+  require_approval:
+    - publish_post
+    - publish_comment
+    - publish_reply
+    - send_message
+    - send_connection_request
+    - react_to_post
+    - edit_live_profile
+    - write_external_system
+    - export_third_party_data
+    - call_paid_service
+    - delete_from_store
+  batch_approval_allowed: false
+  standing_approval_allowed: false
+
+data:
+  # Highest available tier wins. Tier 0 (user-provided) is always available
+  # and is not a degraded mode.
+  preferred_tier_order: [1, 2, 0, 3]
+  refuse_always:
+    - credential_collection
+    - session_cookie_reuse
+    - captcha_bypass
+    - rate_limit_evasion
+    - logged_in_ui_automation
+
+analytics:
+  review_windows_days: [7, 30]
+  # Volume metrics are diagnostic only; never lead a report with them.
+  lead_with_outcome_tiers: [1, 2, 3]
+  min_samples_before_concluding: 5

@@ -1,6 +1,8 @@
 {
   "name": "rubicon",
-  "owner": { "name": "Rubicon AI" },
+  "owner": {
+    "name": "Rubicon AI"
+  },
   "plugins": [
     {
       "name": "backup-before-troubleshooting",
@@ -20,10 +22,40 @@
         "ref": "v0.1.1"
       },
       "description": "A nine-seat marketing advisory board for Claude Code: decide, pressure-test, ideate, retrospect, and get smart — with advisors who challenge instead of cheerlead.",
-      "author": { "name": "Dax Davis", "url": "https://daxdavis.com" },
+      "author": {
+        "name": "Dax Davis",
+        "url": "https://daxdavis.com"
+      },
       "homepage": "https://github.com/rubicon/rubicon-marketing-board",
       "license": "MIT",
-      "keywords": ["marketing", "advisory-board", "cmo", "strategy", "positioning", "growth"]
+      "keywords": [
+        "marketing",
+        "advisory-board",
+        "cmo",
+        "strategy",
+        "positioning",
+        "growth"
+      ]
+    },
+    {
+      "name": "salience",
+      "source": "./plugins/salience",
+      "description": "Executive presence system for LinkedIn: one entry point for profile intelligence, evidence-backed positioning, brand voice, content and authority, relationship intelligence, executive career search, and consulting development - with a verified-fact ledger that never invents career claims.",
+      "author": {
+        "name": "Dax Davis",
+        "url": "https://daxdavis.com"
+      },
+      "license": "MIT",
+      "keywords": [
+        "linkedin",
+        "executive",
+        "personal-brand",
+        "profile-optimization",
+        "positioning",
+        "career",
+        "consulting",
+        "cmo"
+      ]
     }
   ]
 }

@@ -1,0 +1,190 @@
+# Worked example of a Salience identity record.
+#
+# EVERY PERSON, COMPANY, AND NUMBER BELOW IS FICTIONAL. This file ships with the
+# plugin as a structural reference. Real records live outside the repository in
+# $SALIENCE_HOME and are never committed.
+#
+# Validates against config/identity.schema.json.
+
+version: "1.0.0"
+updated: 2026-09-02
+
+person:
+  name: "Morgan Reyes"
+  location: "Austin, TX"
+  relocation_open: false
+  remote_open: true
+  linkedin_url: "https://www.linkedin.com/in/morganreyes"
+  website: "https://morganreyes.example"
+
+roles:
+  - id: role-hollis
+    title: "Chief Marketing Officer"
+    organization: "Hollis Data"
+    employment_type: full-time
+    start: "2023-02"
+    end: null
+    location: "Austin, TX"
+    scope:
+      team_size: 22
+      budget: "$40M"
+      pnl_owned: true
+      reports_to: "CEO"
+      business_units: 3
+      geography: "North America"
+
+  - id: role-northbay
+    title: "VP Growth Marketing"
+    title_standard: "VP Marketing"
+    organization: "Northbay Systems"
+    employment_type: full-time
+    start: "2019-06"
+    end: "2023-01"
+    location: "Austin, TX"
+    scope:
+      team_size: 11
+      budget: "$12M"
+      pnl_owned: false
+      reports_to: "CRO"
+
+  - id: role-advisory-fernwood
+    title: "Marketing Advisor"
+    organization: "Fernwood Labs"
+    employment_type: advisory
+    start: "2024-03"
+    end: null
+    scope:
+      team_size: 0
+      reports_to: "Founder/CEO"
+
+facts:
+  # A verified metric, sourced, with context and attribution both explicit.
+  - id: fact-001
+    claim: "Cut blended CAC 34% across three business units over 11 months"
+    tier: verified
+    source: "imports/fy25-final-close.xlsx, tab 'Blended CAC'"
+    recorded: 2026-08-14
+    role_id: role-hollis
+    period: "2024-08..2025-07"
+    context: employer-side
+    attribution: led-team
+    metric:
+      value: "34"
+      unit: "percent reduction"
+      period: "11 months"
+      scope: "blended, 3 business units"
+    used_in: ["headline-v3", "about-v2", "experience/hollis"]
+    history:
+      - claim: "Cut blended CAC 38% across three business units over 11 months"
+        source: "imports/q3-board-deck-2025.pdf, slide 14"
+        superseded: 2026-08-14
+        reason: "Q3 deck figure was a projection; final close came in at 34%"
+
+  # Verified, personal attribution — Morgan did this directly.
+  - id: fact-002
+    claim: "Consolidated the MarTech stack from 14 tools to 6"
+    tier: verified
+    source: "imports/martech-consolidation-readout.pdf"
+    recorded: 2026-08-14
+    role_id: role-hollis
+    context: employer-side
+    attribution: personal
+    used_in: ["about-v2", "experience/hollis"]
+
+  # User-stated, no artifact yet. Publishable, flagged once in the delivery note.
+  - id: fact-003
+    claim: "Grew qualified pipeline 3.4x while holding headcount flat"
+    tier: stated
+    recorded: 2026-08-14
+    role_id: role-hollis
+    context: employer-side
+    attribution: led-team
+    used_in: ["headline-v3"]
+
+  # Inferred by Salience. Must be confirmed before it appears in published copy.
+  - id: fact-004
+    claim: "Has operated under private-equity ownership"
+    tier: inferred
+    recorded: 2026-08-20
+    role_id: role-hollis
+    context: employer-side
+    attribution: personal
+
+  # Client-side work. Kept separate from employer-side even where a name repeats.
+  - id: fact-005
+    claim: "Rebuilt lifecycle marketing for a Series B fintech; trial-to-paid from 9% to 16%"
+    tier: verified
+    source: "imports/fernwood-engagement-summary.pdf"
+    recorded: 2026-08-22
+    role_id: role-advisory-fernwood
+    context: client-side
+    attribution: personal
+
+  # Positioning language, not yet accepted. Never published while tier is 'proposed'.
+  - id: fact-006
+    claim: "The operator CMOs call when growth stops responding to spend"
+    tier: proposed
+    recorded: 2026-09-01
+
+gaps:
+  - id: gap-001
+    wants: "A dollar figure for the MarTech consolidation savings"
+    why: "Consolidation is the strongest differentiator and currently carries no number"
+    blocks: ["headline-v3", "about-proof-line"]
+    asked: 2026-08-22
+    resolved: null
+
+  - id: gap-002
+    wants: "Confirmation of PE ownership at Hollis Data, and the sponsor name if public"
+    why: "fact-004 is inferred; PE operating experience is a stated requirement in most target roles"
+    blocks: ["role-alignment/*"]
+    asked: 2026-08-20
+    resolved: null
+
+targets:
+  roles:
+    - "Chief Marketing Officer"
+    - "VP Marketing"
+    - "Head of Marketing"
+  company_profile: "B2B SaaS, $20M-$200M ARR, PE-backed or post-Series-C, growth flattening"
+  industries: ["B2B SaaS", "FinTech", "Data infrastructure"]
+  audiences:
+    - "Retained search partners in the CMO practice"
+    - "Founders and CEOs at post-product-market-fit B2B SaaS"
+    - "PE operating partners"
+  consulting_in_scope: true
+  compensation_floor: "$385K base"
+  deal_breakers:
+    - "Relocation outside Central Texas"
+    - "Marketing reporting into Sales"
+    - "Pre-product-market-fit"
+
+boundaries:
+  will_not_claim:
+    - "International or EMEA expansion experience"
+    - "Category creation - repositioned an existing category, did not create one"
+  will_not_be_pitched_for:
+    - "Agency-side roles"
+    - "Individual-contributor demand-gen roles"
+  confidential_clients:
+    - "Fernwood Labs"
+
+expertise:
+  - area: "Demand generation"
+    depth: core
+    evidence: ["fact-001", "fact-003"]
+  - area: "Marketing technology and automation"
+    depth: core
+    evidence: ["fact-002"]
+  - area: "Marketing analytics and attribution"
+    depth: strong
+    evidence: ["fact-001"]
+  - area: "Lifecycle and retention marketing"
+    depth: strong
+    evidence: ["fact-005"]
+  - area: "Brand strategy"
+    depth: working
+    evidence: []
+  - area: "International expansion"
+    depth: familiar
+    evidence: []
