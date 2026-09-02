@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [1.1.1](https://github.com/rubicon/ai-skills/compare/v1.1.0...v1.1.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* **ci:** pin release-please 1Password reference by item UUID ([#26](https://github.com/rubicon/ai-skills/issues/26)) ([6acdef7](https://github.com/rubicon/ai-skills/commit/6acdef759482bd1f13f766c0e73a64319508aa2f)), closes [#25](https://github.com/rubicon/ai-skills/issues/25)
+
 ## [1.1.0](https://github.com/rubicon/ai-skills/compare/v1.0.0...v1.1.0) (2026-08-31)
 
 
