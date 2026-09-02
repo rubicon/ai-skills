@@ -213,7 +213,7 @@ it is exactly equivalent. See `adapters/README.md`.
 
 ## Evaluation
 
-31 cases in `evals/`, covering every module plus routing and the safety boundary. Fabrication and
+33 cases in `evals/`, covering every module plus routing and the safety boundary. Fabrication and
 unapproved-action violations fail the suite outright, regardless of how good the output is.
 
 ```

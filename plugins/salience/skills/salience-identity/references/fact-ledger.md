@@ -172,3 +172,26 @@ Two further limits, both from the same principle:
 - Upgrade `led-team` to `personal`
 - Delete history on correction
 - Let a gap vanish because the output read better without it
+
+## Restriction and subject
+
+Two fields govern what a fact may be used for, independently of how well it is sourced.
+
+**`subject`** — `self` (absent means this) or `organization`. An `organization` fact is the
+company's achievement. It is usable as company context and unusable as a personal claim, and it
+carries no `attribution`, because "personally or via the team" is not a question that applies to
+a fact that is not the user's.
+
+**`visibility`** — `public` (absent means this), `shared`, or `private`. `shared` permits a sent
+résumé or a named private conversation but not the live profile. `private` permits neither, and
+requires a `visibility_reason` so the restriction survives the person who set it.
+
+Two rules that get broken by well-meaning drafting:
+
+1. **Verification does not lift a restriction.** They answer different questions — one is about
+   whether the claim is true, the other about whether the user is permitted to make it.
+2. **Paraphrase does not lift a restriction.** A quarantined 20% turned into "roughly a fifth" or
+   "a double-digit reduction" is the same disclosure wearing a hedge.
+
+When a restriction is what stops a stronger line, say what the line cost and move on. Do not
+relitigate a restriction the user set; they know what it is protecting.

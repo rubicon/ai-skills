@@ -126,6 +126,48 @@ facts:
     tier: proposed
     recorded: 2026-09-01
 
+  # The company's achievement, not Morgan's. Verified, well sourced, and still
+  # not sayable as "I grew the business 55%". Note there is no attribution field:
+  # 'personal' or 'led-team' is meaningless once the subject is the organization.
+  # Legitimate uses: company context in an Experience scope line, and interview
+  # framing. Illegitimate: a headline, an About proof line, a resume bullet.
+  - id: fact-007
+    claim: "Hollis Data grew 55% year over year during the FY25 period"
+    tier: verified
+    source: "imports/fy25-final-close.xlsx, tab 'Company'"
+    recorded: 2026-08-14
+    role_id: role-hollis
+    context: employer-side
+    subject: organization
+
+  # Quarantined. Sourcing is not the question — permission is. A fact can be
+  # verified and still be one that never leaves this file.
+  - id: fact-008
+    claim: "Reduced cost per qualified conversion by 20% on the Fernwood engagement"
+    tier: verified
+    source: "imports/fernwood-engagement-summary.pdf, appendix B"
+    recorded: 2026-08-22
+    role_id: role-advisory-fernwood
+    context: client-side
+    attribution: personal
+    subject: self
+    visibility: private
+    visibility_reason: >-
+      Client has not cleared the figure for external use, anonymized or not.
+      Do not publish, do not put in a sent resume, do not paraphrase into a range.
+
+  # Publishable to a search partner, not to the open web. 'shared' is the case
+  # most corpora record as prose and then lose.
+  - id: fact-009
+    claim: "Carried a $40M marketing budget across three business units"
+    tier: verified
+    source: "imports/fy25-final-close.xlsx, tab 'Plan'"
+    recorded: 2026-08-14
+    role_id: role-hollis
+    context: employer-side
+    attribution: personal
+    visibility: shared
+
 gaps:
   - id: gap-001
     wants: "A dollar figure for the MarTech consolidation savings"

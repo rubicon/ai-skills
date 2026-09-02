@@ -77,17 +77,54 @@ Directory names are strong classification evidence. Read them before opening any
 | `Board`, `Advisory` | Governance roles | Role entries |
 | `Archive`, `Old`, dated back-folders | Deep history | Ask before reading; often superseded |
 
-## Prefer an existing source of truth
+## Authority is declared, never inferred
 
-If the corpus already contains a consolidated career document — commonly named *career corpus*,
-*source of truth*, *evidence database*, or *master resume* — **read it first and build the spine from
-it.** It represents work the user already did to reconcile their own history, and rebuilding that
-from scattered files invites contradictions they already resolved.
+A maintained corpus usually states its own precedence — a README, a `CLAUDE.md`, or a header block
+saying which file wins when two disagree. **Find that statement and follow it.** Where none exists,
+ask which file is canonical. Do not decide from evidence the filesystem happens to offer.
 
-Then use everything else to **corroborate and date** it, not to replace it.
+**Never infer authority from a filename.** A file called *Source of Truth* is as likely to be a
+navigation guide pointing at the real spine as it is to be the spine. Read enough of it to find out
+which.
 
-Where such a document exists and disagrees with a resume, that is a contradiction to surface, not to
-resolve — the same rule as anywhere else.
+**Never infer authority from size or completeness.** This is the failure mode that looks most like
+diligence. Observed on a real corpus: the largest file by a factor of six, matching every
+name heuristic, carrying a complete duplicate of two other files — and explicitly disclaimed in the
+README as a non-authoritative recovery dump that was still being edited. A "most complete file wins"
+rule lands on exactly the wrong document, and lands there confidently.
+
+What actually separates a maintained file from a dump is **maintenance evidence**, not volume:
+conflict markers, reconciliation blocks naming a canonical value and the date it was settled, and
+dated corrections. A dump has quarantine markers copied in with everything else and no reconciliation
+blocks at all, because nobody has been resolving anything in it.
+
+Once the canonical spine is identified, **read it first and build the career spine from it.** It
+represents work the user already did to reconcile their own history, and rebuilding that from
+scattered files resurfaces contradictions they already settled. Use everything else to
+**corroborate and date** it, not to replace it.
+
+### When two authority orders disagree
+
+A corpus can declare precedence in more than one place, and the orders can differ — a README naming
+one order and a `CLAUDE.md` in the same tree naming another. **That is a contradiction, and it is
+surfaced, not resolved by picking.** It is also the most consequential contradiction in a corpus,
+because it silently changes the answer to every later question.
+
+### Named exclusions belong in the config
+
+Any file the corpus itself disclaims — a recovery dump, a superseded planning artifact left in a
+live folder, an "alternative" variant explicitly marked as not the default — is excluded by name,
+recorded with the reason, and re-confirmed on a later run. Do not rely on catching it again by
+inference.
+
+## Generated companion views
+
+A canonical structured file often ships alongside a generated prose view of the same data:
+`awards-ledger.yaml` and `awards-ledger.md`, a database and its exported summary. **Import one.**
+Ingesting both double-counts every entry, and the duplicates look like corroboration.
+
+The structured file is canonical unless the corpus says otherwise. Where the prose view contains
+material the structured file does not, that is drift worth reporting, not extra facts to merge.
 
 ## Provenance
 
@@ -104,6 +141,42 @@ source:
 
 Use a `corpus:` prefix and a path relative to the configured root. Absolute paths leak the user's
 directory layout into the record for no benefit, and break if the folder moves.
+
+### Provenance is usually prose
+
+A disciplined corpus carries provenance inline rather than in fields, and these markers hold exactly
+what the evidence contract needs. Read them:
+
+| Marker in the corpus | What it means | Where it lands |
+|---|---|---|
+| A dated source tag — `(2023-08; also 2024-06, 2025-01)` | The claim was attested on those dates, more than once | `recorded`, and corroboration strength |
+| `⚠️ CONFLICT`, or the same figure differing between files | An open disagreement | Surface it. Never pick |
+| `✓ Conflicts reconciled by <person> on <date>` | A settled question, with a canonical value named | Take the canonical value; put the loser in `history` with the reconciliation date as `superseded` |
+| A cited source filename | The artifact behind the claim | `source`, and a candidate for `verified` |
+| `COMPANY-CONTEXT ONLY`, or similar | The fact belongs to the organization | `subject: organization` |
+| A quarantine note | Not publishable, whatever its sourcing | `visibility: private`, with the note as `visibility_reason` |
+
+A reconciled conflict is **not** a contradiction to re-surface. The user already settled it, and
+raising it again reads as not having read their work.
+
+### Confidence vocabularies must be mapped, and the mapping recorded
+
+A corpus may carry more than one confidence scale — `Confirmed / Probable / Needs Verification` in
+one file and `High / Medium / Low` in another, with no mapping defined between them. Both must land
+on Salience's five tiers, and **the mapping chosen is reported to the user**, because it is a
+judgment call that changes what gets published.
+
+A defensible default, stated as a proposal rather than applied silently:
+
+| Corpus says | Salience tier |
+|---|---|
+| `Confirmed` with a cited artifact · `High` with a cited artifact | `verified` |
+| `Confirmed (per <user>)` · `Confirmed` with no artifact | `stated` |
+| `Probable` · `Medium` | `inferred` |
+| `Needs Verification` · `Low` | `gap`, not a fact |
+
+Note the asymmetry: a confidence label is not a source. `Confirmed` with nothing cited is still the
+user's own assertion, and it is `stated`.
 
 ## Tiering by artifact type
 
@@ -129,6 +202,11 @@ Corpora are commonly dated in filenames — `2000-06-15 - ...`, `2025-08-14-...`
 `recorded` and period context, and say the date came from the filename rather than from the content.
 Filenames are usually right and occasionally are the date the file was saved rather than written.
 
+**Frontmatter `updated:` is not a staleness signal on its own.** It is hand-maintained and drifts
+from filesystem mtime routinely — a file edited last week can still claim it was updated months ago.
+Where the two disagree, say so rather than trusting either; a dated reconciliation block inside the
+content beats both.
+
 ## Voice
 
 A corpus is the best voice source available, and better than asking. Route writing samples to
@@ -150,6 +228,10 @@ conventions, not the person's voice.
 - **Skip anything under a path the user flagged private**, without needing a reason
 - **Third-party material** — references, other people's reviews, private correspondence — is subject
   to the same third-party rules as anywhere else. Professional context only, and never exported
+- **Quarantine markers are load-bearing.** A figure can be verified, well sourced, and still barred
+  from a sent resume or a public profile. Sourcing answers a different question than permission
+  does. Any quarantine note in the corpus becomes `visibility: private` with the note preserved as
+  `visibility_reason`, so the restriction outlives whoever set it
 - **Say what was read.** Report the files opened, not just the facts found. The user should be able
   to audit what the system looked at
 

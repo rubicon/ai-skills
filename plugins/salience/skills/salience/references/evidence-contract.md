@@ -128,20 +128,71 @@ The same applies to:
 - Outcomes the user caused vs. outcomes that occurred during their tenure. "Revenue grew 40% while
   I led marketing" is defensible; "I grew revenue 40%" may not be.
 
+### Whose fact is it — `subject`
+
+A third case, and the one that does the most damage because it looks like a strong proof point:
+a metric that is **true, sourced, and the organization's**, not the person's. Company growth,
+category rank, funding raised, a market position held.
+
+```yaml
+subject: organization    # absent means 'self'
+```
+
+A fact with `subject: organization` **never appears as a personal achievement.** Not in a headline,
+not as an About proof line, not as a resume bullet. It is not a stronger version of a weaker claim
+and it is not fixed by hedging the verb — it is a different kind of claim, and the room notices.
+
+Where it *is* legitimate: company context in an Experience scope line ("marketing for a business
+growing 55% year over year"), and interview framing where the person's role within it can be
+explained. Both state it as the company's, because it is.
+
+A fact carrying `subject: organization` never carries `attribution` — `personal` and `led-team`
+describe how much of it was the user, which is not a question that applies.
+
+## Where a fact may appear — `visibility`
+
+Sourcing and permission are different questions, and evidence discipline answers only the first.
+
+```yaml
+visibility: public | shared | private    # absent means 'public'
+visibility_reason: "..."                 # required when private
+```
+
+- **`public`** — may appear anywhere, including the live profile.
+- **`shared`** — a sent resume, a search-partner conversation, a private discussion. **Not** the
+  public profile. Budget and headcount figures often sit here.
+- **`private`** — never leaves the record. A client has not cleared it, an employer treats it as
+  confidential, or the user quarantined it. **Verified status does not override this**, and neither
+  does anonymizing, rounding, or converting it to a range — a quarantined number turned into "over
+  15%" is the same disclosure with a hedge on it.
+
+`visibility` is per fact. The identity record's `confidential_clients` list is a separate,
+client-level control, and a fact can be restricted by either.
+
+When a rewrite would be materially stronger with a restricted fact in it, say so and leave it out.
+Do not ask the user to reconsider a restriction they already set; state what the line costs and let
+them raise it themselves.
+
 ## Ledger entry shape
 
 Every fact in `identity.yaml` carries its tier and provenance:
 
 ```yaml
 - id: fact-042
-  claim: "Cut blended CAC 38% across three portfolio brands in 11 months"
+  claim: "Cut blended CAC 34% across three portfolio brands in 11 months"
   tier: verified
-  source: "imports/q3-board-deck-2025.pdf, slide 14"
+  source: "imports/fy25-final-close.xlsx, tab 'Blended CAC'"
   recorded: 2026-09-02
   context: employer-side          # or client-side
-  attribution: led-team           # or personal
+  subject: self                   # or organization — absent means self
+  attribution: led-team           # or personal; omitted when subject is organization
+  visibility: public              # or shared, or private — absent means public
   used_in: [headline-v3, about-v2, experience/hollis]
 ```
+
+The source here is the final close, not the board deck that projected 38% earlier in the year.
+Where both exist, the record of what happened outranks the record of what was expected, and the
+projection goes to `history` rather than being quietly dropped.
 
 When a claim is used in published copy, record where. If the underlying fact is later corrected,
 you need to know every public surface that repeats it.

@@ -10,7 +10,7 @@ description: >-
   export", "parse this", "pull this post", "look up this profile", "connect LinkedIn", "my career
   files are in", "point at this folder", "use my corpus". Not for writing profile copy (use
   salience-profile) or interpreting performance (use salience-analytics).
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Data and Import

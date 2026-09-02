@@ -8,7 +8,7 @@ description: >-
   "add this achievement", "that number is wrong", "what do you know about me", "forget that",
   "export my data", or whenever another module hits a missing or contradictory fact. Not for
   writing profile copy (use salience-profile) or deciding market position (use salience-positioning).
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Identity Engine

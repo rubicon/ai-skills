@@ -10,7 +10,7 @@ description: >-
   "rewrite my headline", "fix my About", "position me for CMO roles", "draft a post", "comment on
   this", "follow up with", "align my profile to this job", "consulting outreach", "how did my
   posts do". Not itself a writer or auditor — it selects and runs the module that is.
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Salience

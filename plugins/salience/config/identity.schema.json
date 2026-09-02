@@ -77,7 +77,25 @@
           "role_id": { "type": "string" },
           "period": { "type": "string" },
           "context": { "type": "string", "enum": ["employer-side", "client-side"] },
-          "attribution": { "type": "string", "enum": ["personal", "led-team"] },
+          "subject": {
+            "type": "string",
+            "enum": ["self", "organization"],
+            "description": "Whose achievement this is. Absent means 'self'. 'organization' marks a fact that is true and sourced but belongs to the company, not the person — publishing it as a personal achievement is an overclaim, not a stronger claim."
+          },
+          "attribution": {
+            "type": "string",
+            "enum": ["personal", "led-team"],
+            "description": "How much of it was the user. Only meaningful when subject is 'self'."
+          },
+          "visibility": {
+            "type": "string",
+            "enum": ["public", "shared", "private"],
+            "description": "Where this fact may appear. Absent means 'public'. 'shared' permits a sent resume or a private conversation but not a public profile. 'private' means it never leaves the record — a quarantined figure, regardless of how well sourced it is."
+          },
+          "visibility_reason": {
+            "type": "string",
+            "description": "Required when visibility is 'private'. Why it is quarantined, so the restriction survives the person who set it."
+          },
           "metric": {
             "type": "object",
             "additionalProperties": false,
@@ -108,6 +126,14 @@
           {
             "if": { "properties": { "tier": { "const": "verified" } }, "required": ["tier"] },
             "then": { "required": ["source"] }
+          },
+          {
+            "if": { "properties": { "subject": { "const": "organization" } }, "required": ["subject"] },
+            "then": { "not": { "required": ["attribution"] } }
+          },
+          {
+            "if": { "properties": { "visibility": { "const": "private" } }, "required": ["visibility"] },
+            "then": { "required": ["visibility_reason"] }
           }
         ]
       }
@@ -152,7 +178,7 @@
       "properties": {
         "will_not_claim": { "type": "array", "items": { "type": "string" } },
         "will_not_be_pitched_for": { "type": "array", "items": { "type": "string" } },
-        "confidential_clients": { "type": "array", "items": { "type": "string" }, "description": "Never named publicly; anonymize in all output." }
+        "confidential_clients": { "type": "array", "items": { "type": "string" }, "description": "Never named publicly; anonymize in all output. Client-level. A per-fact prohibition uses the fact's own 'visibility' field instead." }
       }
     },
 
