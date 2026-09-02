@@ -32,6 +32,23 @@ skillshare install github.com/rubicon/ai-skills -s rubicon-wordpress-version-lab
 | [identity-theft](skills/identity-theft/SKILL.md) | Steals fictional identities, not personal data — rewrites your text, Markdown, or HTML in a character's voice (Ron Swanson, Yoda, pirate, and 48 more) while code, links, and facts survive untouched |
 | [cache-money](skills/cache-money/SKILL.md) | Keep Claude Code sessions cheap and sharp — session hygiene, `CLAUDE.md` discipline, native auto-compaction controls, model selection, and context-cost habits |
 
+## Plugins
+
+Install from this repository's marketplace (`rubicon`):
+
+```bash
+/plugin marketplace add rubicon/ai-skills
+/plugin install <plugin-name>@rubicon
+```
+
+| Plugin | Description |
+|--------|-------------|
+| [salience](plugins/salience/README.md) | Executive presence system for LinkedIn — profile intelligence, positioning, voice, content, relationships, executive career search, and consulting development, behind one entry point and a verified-fact ledger |
+| [backup-before-troubleshooting](plugins/backup-before-troubleshooting/README.md) | Stand up a dated, self-documenting recovery workspace before changing system, app, or config state |
+| [session-messaging](plugins/session-messaging/README.md) | Cross-session messaging for Claude Code Desktop — how sessions message each other and report their own address |
+| [rubicon-marketing-board](https://github.com/rubicon/rubicon-marketing-board) | A nine-seat marketing advisory board for Claude Code (external source) |
+
+
 ## Contributing
 
 Contributions are welcome — especially new **personalities** for the
