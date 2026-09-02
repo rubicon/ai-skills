@@ -65,6 +65,15 @@ salience-identity  →  salience-positioning  →  salience-voice
 `salience-data` feeds identity at any point. `salience-governance` gates every external write and
 is never skipped for expedience.
 
+## Ambiguity versus contradiction
+
+Two different situations, and they are handled differently:
+
+- **Ambiguity** — the request could mean more than one thing. One question, concrete options, then
+  proceed.
+- **Contradiction** — the facts disagree. Never resolved by guessing. Whether to stop or to deliver
+  and flag is decided by the test in `evidence-contract.md`, not by this rule.
+
 ## Handling ambiguity
 
 One question, two or three concrete options, then proceed. Do not ask a second clarifying question

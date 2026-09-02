@@ -30,7 +30,7 @@ Versions use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- `salience` plugin (v0.1.0) — unified LinkedIn executive presence system: 12 modules behind one entry point (profile intelligence, identity/fact ledger, positioning, voice, content, engagement, executive career, consulting, data import, analytics, governance), a private out-of-repo data store, 8 templates, 4 adapter docs, 5 commands, and a 28-case evaluation suite
+- `salience` plugin (v0.1.0) — unified LinkedIn executive presence system: 12 modules behind one entry point (profile intelligence, identity/fact ledger, positioning, voice, content, engagement, executive career, consulting, data import, analytics, governance), a private out-of-repo data store, 8 templates, 4 adapter docs, 5 commands, career-corpus directory ingestion, and a 31-case evaluation suite
 - `session-messaging` plugin (v0.1.0) — cross-session messaging for Claude Code Desktop (CCD): a bundled skill covering `mcp__ccd_session_mgmt__send_message` addressing and session self-identification, plus two commands (`session-whoami`, `session-send`)
 - `rubicon-marketing-board` plugin listed as an external GitHub source (pinned to `v0.1.1`) — first marketplace entry sourced from a separate repo rather than vendored under `plugins/`
 - `cache-money` skill (v1.1.0) — Claude Code token/context-management practices for cheaper, sharper sessions

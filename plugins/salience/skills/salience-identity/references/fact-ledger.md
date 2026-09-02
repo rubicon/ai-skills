@@ -47,7 +47,25 @@ appeared in two different forms publicly is worth remembering before a diligence
 
 ## Correct
 
-The new value wins; the old is retained.
+The new value wins **when it is at least as well sourced as the one it replaces.** Check that first,
+because the common case is the opposite.
+
+| The old value is | The new value is | Do |
+|---|---|---|
+| `stated` | `stated` | Correct. New value wins, history retained |
+| `stated` | `verified` | Correct, and promote |
+| `verified` | `verified`, newer artifact | Correct. Note both artifacts in history |
+| **`verified` with a source** | **`stated`, no artifact** | **Do not correct. This is a conflict** |
+
+That last row is the one that matters, and it is not rare — a user recalling a different number than
+the document says is a genuine disagreement between memory and record, not a typo being fixed.
+
+Hold the new value at `stated`, **freeze the published copy at the sourced value**, and ask for the
+artifact. Do not silently downgrade a sourced claim to an unsourced one, and do not update live
+surfaces until one side wins. Changing a public number twice in three weeks costs more than the
+delay does.
+
+The old is retained in every case.
 
 ```yaml
 - id: fact-042

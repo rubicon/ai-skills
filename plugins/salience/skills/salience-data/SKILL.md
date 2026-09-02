@@ -4,8 +4,11 @@ description: >-
   Get LinkedIn and career data into Salience and normalize it — parsing resumes, LinkedIn data
   exports, pasted profile text, bios, case studies, and post or engagement data; resolving a person
   or company to a profile; and selecting a retrieval path with graceful fallbacks when direct access
-  is unavailable. Triggers on "import my resume", "here's my profile export", "parse this",
-  "pull this post", "look up this profile", "connect LinkedIn". Not for writing profile copy (use
+  is unavailable. Also ingests a directory the user already keeps — a career folder, portfolio
+  archive, or document vault — surveying it and extracting facts with provenance instead of
+  interviewing for what is already on disk. Triggers on "import my resume", "here's my profile
+  export", "parse this", "pull this post", "look up this profile", "connect LinkedIn", "my career
+  files are in", "point at this folder", "use my corpus". Not for writing profile copy (use
   salience-profile) or interpreting performance (use salience-analytics).
 version: 0.1.0
 ---
@@ -26,6 +29,23 @@ do not need.
 ## Retrieval tiers
 
 Choose the highest tier available. Report which tier was used when it affects confidence.
+
+### Tier 0a — A corpus the user already keeps (best available, if it exists)
+
+Many executives already have a career folder: resumes, press, awards, case studies, prior
+applications, writing samples. Pointing Salience at it beats every other intake path, because it is
+already organized, already dated, and already reconciled.
+
+```
+My career material is in ~/Documents/Career — use that instead of asking me.
+```
+
+**Survey first, then read only what the plan names.** Never ingest a directory wholesale — a career
+folder with a code project inside it is common, and the file count will be dominated by
+`node_modules`. Report what was read, not just what was found.
+
+Full method — configuration, folder-signal classification, exclusions, tiering by artifact type,
+provenance, and privacy: `references/corpus-ingestion.md`.
 
 ### Tier 0 — User-provided (default, always available, zero setup)
 
@@ -151,5 +171,6 @@ Never retry aggressively against a rate limit.
 
 ## References
 
+- `references/corpus-ingestion.md` — pointing Salience at a directory the user already keeps
 - `references/import-paths.md` — per-source parsing detail, LinkedIn export file map
 - `references/tiers.md` — capability-by-tier matrix and what each path can and cannot do

@@ -26,7 +26,10 @@ One delivery shape across every module. The user should not be able to tell whic
 Only what changes the user's decision or exposure:
 
 - Claims that are `stated`, `inferred`, or `proposed`
-- Contradictions found between sources
+- Contradictions found between sources — these lead the block. Whether to deliver at all or stop
+  and ask first is decided by the test in `evidence-contract.md`: stop when the contradiction
+  determines the deliverable's content or would reach published copy, otherwise deliver and gate
+  the consequential step in `[NEXT]`
 - Gaps where evidence would materially strengthen a line
 - Anything about to touch a live external surface
 

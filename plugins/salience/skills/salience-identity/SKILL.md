@@ -40,16 +40,25 @@ ask second — pulling from a resume beats asking 40 questions.
 Ask for whatever is handy, in one message:
 
 ```
-Fastest start is importing what you already have. Send any of these — one is enough:
+Fastest start is importing what you already have. Any one of these is enough:
 
-1. Resume or CV (any format)
-2. Your LinkedIn profile text (copy from "Edit profile", or a Settings → Get a copy of your data export)
-3. A bio you have used for a talk, panel, or podcast
-4. A case study, board deck, or performance review with real numbers
-5. Nothing — we can build it by conversation instead
+1. A folder — if you keep career material anywhere (resumes, press, awards, prior
+   applications, writing samples), point me at the directory and I will work from
+   what is there. Best option by a distance if it exists.
+2. Resume or CV (any format)
+3. Your LinkedIn profile text (copy from "Edit profile", or a Settings → Get a copy of your data export)
+4. A bio you have used for a talk, panel, or podcast
+5. A case study, board deck, or performance review with real numbers
+6. Nothing — we can build it by conversation instead
 ```
 
-Hand anything received to `salience-data` for parsing, then return here to structure it.
+Hand anything received to `salience-data` for parsing, then return here to structure it. A
+directory goes to `salience-data`'s corpus path, which surveys the structure and proposes a read
+plan before opening anything — see its `references/corpus-ingestion.md`.
+
+A folder is listed first deliberately. Someone with an organized career folder has already
+reconciled their own history once, and interviewing them for it again is the fastest way to make
+this feel like paperwork.
 
 ### Step 2 — Confirm the spine
 

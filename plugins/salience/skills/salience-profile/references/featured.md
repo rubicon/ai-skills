@@ -12,7 +12,7 @@ supporting evidence. Weight accordingly.
 - **Three strong items beats ten weak ones.** Featured renders as a carousel; items past the third
   are rarely seen.
 - **Custom thumbnails, 1200×627**, with benefit-driven titles rather than descriptive ones.
-  - Not "My blog post on marketing ops" → "How we cut $1.1M from a 14-tool MarTech stack"
+  - Not "My blog post on marketing ops" → "How we cut a 14-tool MarTech stack down to 6"
   - Not "Case study PDF" → "B2B SaaS pipeline teardown, with the real numbers"
 - **Rotate quarterly.** Anything older than about a year signals a dormant profile.
 - **Everything featured must be something the user is willing to be asked about in detail.**

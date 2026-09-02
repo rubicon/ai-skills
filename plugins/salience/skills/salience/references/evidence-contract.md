@@ -87,6 +87,26 @@ When two sources disagree about the same fact:
 4. Record the resolution *and* the fact that a conflict existed. A profile line that once
    disagreed with a resume is worth remembering before the next reference check.
 
+### Stop, or deliver and flag?
+
+Both, depending on what the contradiction blocks. The test is **what happens if the user acts on
+the output before resolving it.**
+
+| Situation | Behavior |
+|---|---|
+| The contradiction determines the content of the deliverable | **Stop and ask.** Producing it means guessing which version is true |
+| The contradiction would enter published copy | **Stop and ask.** Never publish either side of an unresolved conflict |
+| The deliverable stands regardless, and the conflict affects a detail or a next step | **Deliver, lead `[VERIFY]` with it, and gate the consequential step** |
+
+Worked: the user asks for a recommendation request to a former manager, and the achievement they
+want cited belongs to a role that manager was not present for. The message is still worth drafting —
+so draft it, lead `[VERIFY]` with the conflict, and make resolving it the `[NEXT]` before anything
+is sent. Stopping there would withhold useful work over a detail.
+
+Contrast: the user asks for a headline and the resume and profile disagree about the metric that
+would go in it. Stop. Any headline produced is a guess about which number is true, and it is
+destined for a public surface.
+
 ```
 [VERIFY]
 Conflict — Head of Marketing start date.

@@ -22,8 +22,14 @@ Marketing across 3 business units — 22 people, $40M media budget, full demand 
 
 • Rebuilt acquisition around signal over volume: blended CAC down 34% in 11 months
 • Grew qualified pipeline 3.4x while holding headcount flat
-• Consolidated 14 MarTech tools to 6, cutting $1.1M annual spend and 3 weeks of reporting lag
+• Consolidated 14 MarTech tools to 6, retiring four overlapping systems of record
 ```
+
+Note what that third bullet does **not** say. The consolidation almost certainly saved money, and
+a dollar figure would make it the strongest line in the section — but no artifact in this record
+carries one, so the bullet claims the change rather than the savings. That gap is logged and asked
+about; it is not filled with an estimate in the meantime. The rest of the section is unaffected,
+which is the point: a missing number costs one clause, and an invented one costs the profile.
 
 A search partner validates scope first and outcomes second. A profile that lists achievements
 without scope reads as ambiguous seniority, which is worse than modest seniority.
@@ -54,7 +60,7 @@ person arrives.
 | Before | After |
 |---|---|
 | Managed the marketing team | Led 22 marketers across brand, demand, and ops; 3 promoted into director roles |
-| Responsible for marketing technology | Consolidated 14 tools to 6; $1.1M saved annually, reporting lag cut from 3 weeks to 2 days |
+| Responsible for marketing technology | Consolidated 14 tools to 6; retired four overlapping systems of record and cut onboarding for a new campaign from 9 days to 2 |
 | Oversaw demand generation | Grew qualified pipeline 3.4x in 11 months while holding budget flat |
 | Worked with sales leadership | Built the joint pipeline model with the CRO; forecast accuracy from 61% to 89% |
 | Led digital transformation | Replaced last-touch attribution with a mixed-media model; reallocated $6M off channels that were taking credit for organic demand |

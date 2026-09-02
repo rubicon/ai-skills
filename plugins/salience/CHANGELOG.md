@@ -48,6 +48,12 @@ source skills, plugins, and MCP servers, read in full rather than by summary.
   warm-path-first outreach, and pipeline tracking.
 - **Data and Import** (`salience-data`) — four retrieval tiers with graceful fallbacks, résumé and
   LinkedIn-export parsing, normalization rules, and identity resolution requiring corroboration.
+- **Career corpus ingestion** (`salience-data/references/corpus-ingestion.md`) — Salience can be
+  pointed at a directory the user already keeps rather than interviewing them for facts that are
+  already on disk. It surveys the structure and proposes a read plan before opening anything,
+  classifies by folder signal, tiers by artifact type, records `corpus:`-relative provenance on
+  every extracted fact, and reports the files it opened. Read-only: it never writes, moves,
+  renames, or deletes anything in a corpus. Offered first in onboarding, ahead of the résumé path.
 - **Analytics and Learning** (`salience-analytics`) — four-tier outcome hierarchy led by
   opportunity rather than volume, experiment tracking, attribution honesty rules, a named list of
   false patterns to refuse (survivorship, format-versus-content, volume-as-engagement, four weeks
@@ -87,6 +93,26 @@ recording:
 - **AI-tell removal.** A ban list without false-positive guards flattens good writing. Added the
   cluster rule (one tell is not evidence), an explicit do-not-flag list, the human signals to
   preserve, and the distinction between clean and lifeless.
+
+### Fixed before release, from the evaluation suite
+
+Five defects the eval subset surfaced against the design itself, each fixed in the module that
+caused it:
+
+- **Contradiction handling disagreed with itself** across three files — the evidence contract said
+  stop, the output contract said flag and deliver, and the router said ask one question. Added an
+  explicit stop-versus-deliver test in the evidence contract, which the other two now defer to.
+- **A user-stated correction to a document-verified fact was treated as a correction**, not a
+  conflict. The fact ledger now compares tiers before deciding which it is.
+- **The governance override clause could be read as reaching the approval gate.** Scoped explicitly
+  to cautions about content and judgment; the gate is a mechanism and does not bend.
+- **"General patterns" was a loophole around the third-party critique refusal** — enumerating the
+  failures in someone's pasted profile under a general heading is the same critique with a
+  disclaimer attached. Closed.
+- **Two worked examples contradicted the shipped fixture**, using a `$1.1M` MarTech savings figure
+  while `gap-001` in the same fixture states that no dollar figure exists for that consolidation.
+  An example that fabricates against its own record teaches fabrication. Rewritten to claim the
+  change rather than the savings, with the gap left open and explained.
 
 ### Notes
 

@@ -5,6 +5,31 @@ store:
   # Root for all personal state. Never inside the repo.
   path: "${SALIENCE_HOME:-~/.claude/salience}"
 
+# Directories Salience may read as career source material. Read-only, always:
+# never written to, moved, renamed, or deleted. Configure in
+# $SALIENCE_HOME/config.yaml, not here - these paths are personal.
+#
+# corpus:
+#   - path: "~/Documents/Career"
+#     role: primary        # primary | voice | evidence | applications
+#   - path: "~/Documents/Writing"
+#     role: voice
+#
+# Always excluded from any corpus, regardless of configuration:
+corpus_exclude:
+  - node_modules
+  - .git
+  - dist
+  - build
+  - out
+  - target
+  - .venv
+  - __pycache__
+  - .DS_Store
+corpus_max_file_mb: 20
+# Survey and propose before reading. Never ingest a directory wholesale.
+corpus_survey_first: true
+
 profile:
   default_mode: standard          # quick | standard | deep
   # Escalate to deep without asking when these are true.
