@@ -37,8 +37,12 @@ applications, writing samples. Pointing Salience at it beats every other intake 
 already organized, already dated, and already reconciled.
 
 ```
-My career material is in ~/Documents/Career — use that instead of asking me.
+My career material is in <a folder> and my writing samples are in <another> — use those.
 ```
+
+A source can be a directory, a single consolidated file, or a git repository, and there can be any
+number of them. Paths are personal and live in `$SALIENCE_HOME/config.yaml`; nothing in this plugin
+names a real location.
 
 **Survey first, then read only what the plan names.** Never ingest a directory wholesale — a career
 folder with a code project inside it is common, and the file count will be dominated by

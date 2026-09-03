@@ -30,10 +30,36 @@ Outside the repository, always. Schema: `config/identity.schema.json`. Worked fi
 
 ---
 
+## Pointing it at material
+
+The identity record can be built from locations the user already keeps, and they can be named at
+any time — during onboarding, or years later when a new one appears:
+
+```
+/salience:identity ~/Documents/Career ~/Documents/Writing
+```
+
+or in conversation: *"My career material is in one folder and my writing is in another — use both."*
+
+Three shapes are accepted, in any combination and any number:
+
+- **A directory** — surveyed first, then read to an agreed plan. Never ingested wholesale.
+- **A single file** — a master résumé or a consolidated career document. Read directly.
+- **A git repository** — surveyed like a directory, with `.git/` never read and commit dates
+  preferred over filename dates.
+
+Each is recorded with a role — `primary`, `voice`, `evidence`, or `applications` — and persisted to
+`$SALIENCE_HOME/config.yaml` so it is not re-asked. Where two `primary` sources disagree, ask which
+one wins rather than deciding from config order, file size, or modification time.
+
+Everything is **read-only, always**: never written to, moved, renamed, or deleted. Facts extracted
+carry the source path as provenance, and the files actually opened are reported back — not just the
+facts found. Method: `../salience-data/references/corpus-ingestion.md`.
+
 ## Onboarding
 
 Run when no identity record exists. Target: **15 minutes**, not an interrogation. Import first,
-ask second — pulling from a resume beats asking 40 questions.
+ask second — pulling from a résumé beats asking 40 questions.
 
 ### Step 1 — Import what already exists
 

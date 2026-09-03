@@ -5,17 +5,28 @@ store:
   # Root for all personal state. Never inside the repo.
   path: "${SALIENCE_HOME:-~/.claude/salience}"
 
-# Directories Salience may read as career source material. Read-only, always:
-# never written to, moved, renamed, or deleted. Configure in
-# $SALIENCE_HOME/config.yaml, not here - these paths are personal.
+# Locations Salience may read as career source material. Read-only, always:
+# never written to, moved, renamed, or deleted.
 #
-# corpus:
-#   - path: "~/Documents/Career"
-#     role: primary        # primary | voice | evidence | applications
-#   - path: "~/Documents/Writing"
-#     role: voice
+# CONFIGURE THESE IN $SALIENCE_HOME/config.yaml, NEVER HERE. Paths are personal
+# and this file is public. Nothing in this repository names a real location.
 #
-# Always excluded from any corpus, regardless of configuration:
+# A source is a directory, a single file, or a git repository, and there may be
+# any number of them:
+#
+# sources:
+#   - path: "<a career folder>"        # directory - surveyed before reading
+#     role: primary                    # primary | voice | evidence | applications
+#   - path: "<a master resume>"        # single file - read directly
+#     role: primary
+#   - path: "<a corpus kept in git>"   # repository - commit dates are real dates
+#     role: primary
+#     kind: repo
+#
+# Two 'primary' sources that disagree are a question for the user, never a
+# decision made from config order, file size, or modification time.
+#
+# Always excluded from any source, regardless of configuration:
 corpus_exclude:
   - node_modules
   - .git

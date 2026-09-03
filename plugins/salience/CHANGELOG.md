@@ -9,11 +9,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.2.0] - 2026-09-02
 
-Corrections from validating the corpus-ingestion method against a real 1,502-file career corpus
-rather than an imagined one. One of the six findings is a schema gap, so this is a minor bump
-rather than a patch.
+Corrections from validating the corpus-ingestion method against a real career corpus rather than an
+imagined one. One of the findings is a schema gap, so this is a minor bump rather than a patch.
 
 ### Added
+
+- **Sources can be a directory, a single file, or a git repository**, in any combination and any
+  number, each with a role (`primary`, `voice`, `evidence`, `applications`). `salience-identity`
+  accepts them directly — `/salience:identity <path> <path>` — registers them, and persists them to
+  `$SALIENCE_HOME/config.yaml` so they are not re-asked. Two `primary` sources that disagree are a
+  question for the user, never a decision made from config order, file size, or modification time.
+  All sources are read-only, always.
 
 - **`subject: self | organization`** on every fact. Marks a metric that is true, sourced, and the
   **company's** rather than the person's — company growth, category rank, funding raised. Such a
@@ -36,6 +42,12 @@ rather than a patch.
   into a range does not rescue it). Suite is now 33 cases.
 
 ### Fixed
+
+- **Shipped examples fingerprinted the real corpus they were validated against.** The survey example
+  reproduced an actual directory tree with its real file counts and sizes, and a provenance example
+  named a real press artifact. Every example is now invented, and no path, folder name, or count in
+  this plugin corresponds to a real location. Personal paths belong in `$SALIENCE_HOME/config.yaml`,
+  never in the plugin, and the config comments now say so explicitly.
 
 - **Corpus ingestion inferred authority instead of reading it.** The method preferred a consolidated
   document by matching filenames — *career corpus*, *source of truth*, *evidence database*. On a
