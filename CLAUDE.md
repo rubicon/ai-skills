@@ -91,6 +91,14 @@ description: >-
 - [ ] YAML frontmatter is valid and includes `name` and `description`; `version` is SemVer (`MAJOR.MINOR.PATCH`)
 - [ ] Skill directory has `README.md` and `CHANGELOG.md`
 - [ ] Root `README.md` skills table updated; root `CHANGELOG.md` has a one-line summary
+- [ ] No personal data in installed content — `bash scripts/check-no-personal-data.sh` passes
+
+**Examples in `skills/` and `plugins/` are invented, never observed.** Everything there is published
+and installed on other people's machines. A directory tree, file count, document title, or path
+copied from a real folder publishes that folder's layout, and it reads as an ordinary example, so
+nothing flags it later. `check-no-personal-data.sh` catches absolute home paths and real email
+addresses; it cannot catch content that is personal by virtue of being accurate. Write the example,
+do not transcribe it.
 
 ## Adding a Plugin
 

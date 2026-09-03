@@ -1,9 +1,20 @@
 {
   "name": "salience",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Executive presence system for LinkedIn: one entry point for profile intelligence, evidence-backed positioning, brand voice, content and authority, relationship intelligence, executive career search, and consulting development — with a verified-fact ledger that never invents career claims.",
-  "author": { "name": "Dax Davis" },
+  "author": {
+    "name": "Dax Davis"
+  },
   "homepage": "https://github.com/rubicon/ai-skills",
   "license": "MIT",
-  "keywords": ["linkedin", "executive", "personal-brand", "profile-optimization", "positioning", "career", "consulting", "cmo"]
+  "keywords": [
+    "linkedin",
+    "executive",
+    "personal-brand",
+    "profile-optimization",
+    "positioning",
+    "career",
+    "consulting",
+    "cmo"
+  ]
 }

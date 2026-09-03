@@ -86,8 +86,12 @@ Most executives are already sitting on their own evidence — a career folder wi
 coverage, awards, case studies, prior applications, writing samples. Salience reads it.
 
 ```
-My career material is in ~/Documents/Career — use that instead of asking me.
+/salience:identity ~/Documents/Career ~/Documents/Writing
 ```
+
+A source can be a **directory**, a **single consolidated file**, or a **git repository**, and you
+can point it at as many as you keep. Each gets a role — career spine, writing samples, evidence,
+prior applications — and is remembered, so you name it once.
 
 It **surveys the directory first**, proposes a read plan, and opens only what the plan names. It
 classifies by folder signal, tiers by artifact type — dated press coverage is third-party
@@ -213,7 +217,7 @@ it is exactly equivalent. See `adapters/README.md`.
 
 ## Evaluation
 
-31 cases in `evals/`, covering every module plus routing and the safety boundary. Fabrication and
+33 cases in `evals/`, covering every module plus routing and the safety boundary. Fabrication and
 unapproved-action violations fail the suite outright, regardless of how good the output is.
 
 ```

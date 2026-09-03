@@ -7,6 +7,83 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-02
+
+Corrections from validating the corpus-ingestion method against a real career corpus rather than an
+imagined one. One of the findings is a schema gap, so this is a minor bump rather than a patch.
+
+### Added
+
+- **Sources can be a directory, a single file, or a git repository**, in any combination and any
+  number, each with a role (`primary`, `voice`, `evidence`, `applications`). `salience-identity`
+  accepts them directly — `/salience:identity <path> <path>` — registers them, and persists them to
+  `$SALIENCE_HOME/config.yaml` so they are not re-asked. Two `primary` sources that disagree are a
+  question for the user, never a decision made from config order, file size, or modification time.
+  All sources are read-only, always.
+
+- **`subject: self | organization`** on every fact. Marks a metric that is true, sourced, and the
+  **company's** rather than the person's — company growth, category rank, funding raised. Such a
+  fact is usable as company context in an Experience scope line and in interview framing, and is
+  never publishable as a personal achievement. It is not a stronger version of a weaker claim and
+  hedging the verb does not fix it. A fact with `subject: organization` carries no `attribution`,
+  enforced by a schema conditional, because "personally or via the team" does not apply to a fact
+  that is not the user's.
+- **`visibility: public | shared | private`** on every fact, with `visibility_reason` required when
+  `private` (also enforced by a conditional, so a quarantine outlives whoever set it). `shared`
+  permits a sent résumé or a named private conversation but not the live profile; `private` permits
+  neither. Two rules stated explicitly because well-meaning drafting breaks both: **verification
+  does not lift a restriction** — they answer different questions — and **paraphrase does not lift
+  one**, since a quarantined 20% rendered as "roughly a fifth" is the same disclosure with a hedge
+  on it. The existing `confidential_clients` list remains a separate client-level control.
+- Governance now checks `visibility` and `subject` before an approval card is drafted. A restricted
+  fact reaching a card is a drafting failure, not a decision to hand the user.
+- Two evaluation cases: **T32** (an organization-subject fact must not become a personal claim, and
+  must not be refused outright either) and **T33** (a quarantined fact stays out, and rounding it
+  into a range does not rescue it). Suite is now 33 cases.
+
+### Fixed
+
+- **A dated LinkedIn export path in `adapters/linkedin-import.md`** reproduced a real export folder
+  name. Replaced with a placeholder. Repo CI now runs `scripts/check-no-personal-data.sh` on every
+  PR, which catches absolute home paths and real email addresses in installed content — though not
+  this class, which is why the rule against transcribing examples is now written into `CLAUDE.md`.
+- **Shipped examples fingerprinted the real corpus they were validated against.** The survey example
+  reproduced an actual directory tree with its real file counts and sizes, and a provenance example
+  named a real press artifact. Every example is now invented, and no path, folder name, or count in
+  this plugin corresponds to a real location. Personal paths belong in `$SALIENCE_HOME/config.yaml`,
+  never in the plugin, and the config comments now say so explicitly.
+
+- **Corpus ingestion inferred authority instead of reading it.** The method preferred a consolidated
+  document by matching filenames — *career corpus*, *source of truth*, *evidence database*. On a
+  real corpus that picks the wrong file twice: a README named "Source of Truth" that is a navigation
+  guide rather than the spine, and a non-authoritative recovery dump that is the largest file by a
+  factor of six and matches every name heuristic. Authority is now read from a declared precedence
+  order and never inferred from a filename, a file's size, or its apparent completeness. What
+  separates a maintained file from a dump is maintenance evidence — conflict markers and dated
+  reconciliation blocks — not volume. Where a corpus declares two precedence orders that disagree,
+  that is surfaced as a contradiction rather than resolved by picking.
+- **No rule against importing a generated companion view.** A canonical `.yaml` shipping beside a
+  generated `.md` of the same data was ingested twice, and the duplicates read as corroboration.
+- **Prose provenance markers were not parsed.** Real corpora carry provenance inline: dated source
+  tags, conflict notes, reconciliation blocks naming a canonical value and the date it was settled,
+  `COMPANY-CONTEXT ONLY`, quarantine notes. Added a mapping table from each to its ledger field. A
+  conflict the user already reconciled is not re-surfaced.
+- **Competing confidence vocabularies had no mapping.** A corpus can carry
+  `Confirmed / Probable / Needs Verification` in one file and `High / Medium / Low` in another with
+  nothing relating them. Added a default mapping onto the five tiers, proposed to the user rather
+  than applied silently, with the asymmetry stated: a confidence label is not a source, so
+  `Confirmed` with nothing cited is `stated`.
+- **Frontmatter `updated:` was treated as a staleness signal.** It drifts from filesystem mtime
+  routinely; where they disagree, say so rather than trusting either.
+- **The ledger-shape example contradicted the shipped fixture**, presenting the superseded 38% board
+  projection as a verified fact sourced to the board deck. The fixture records 34% from the final
+  close as canonical. Same defect class as the `$1.1M` example fixed in 0.1.0 — a worked example
+  that fabricates against its own record teaches fabrication.
+- **Eval case T30 encoded the loophole its own module forbids.** Its `must` list required "offers
+  the general patterns instead", which is exactly the phrasing that lets a third-party critique
+  through under a disclaimer. Rewritten to require the redirect and forbid enumerating the pasted
+  profile's failures.
+
 ## [0.1.0] - 2026-09-02
 
 Initial release. One unified LinkedIn executive presence system, synthesized from 33 in-scope
@@ -152,5 +229,6 @@ caused it:
 - Auditing or critiquing a third party's profile is refused, with the two legitimate exceptions
   named: reading it as research, and auditing one the user was asked to help with.
 
-[Unreleased]: https://github.com/rubicon/ai-skills/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/rubicon/ai-skills/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/rubicon/ai-skills/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rubicon/ai-skills/releases/tag/v0.1.0

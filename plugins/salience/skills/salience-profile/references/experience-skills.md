@@ -90,6 +90,16 @@ one, and a reference call will make the distinction whether or not the profile d
 Equally: outcomes *caused* versus outcomes *coincident with tenure*. "Revenue grew 40% while I led
 marketing" is defensible when marketing was one contributor. "I grew revenue 40%" may not be.
 
+And the third case: a fact the ledger marks `subject: organization` is the **company's** achievement.
+It belongs in the scope line as context — "marketing for a business growing 55% year over year" —
+and never in a bullet, because a bullet is a list of things the person did. Moving a company metric
+into a bullet is the single easiest way to turn a well-sourced profile into an overclaim, and it
+survives right up until someone asks what exactly the user's contribution to it was.
+
+Facts marked `visibility: shared` may go in a résumé sent to a named recipient but not on the public
+profile — budget and headcount frequently sit here. Facts marked `visibility: private` appear in
+neither, regardless of how well sourced they are, and are not rescued by rounding them into a range.
+
 ### Confidential employer information
 
 Executives routinely hold numbers they cannot publish — private-company revenue, margins,

@@ -9,7 +9,7 @@ description: >-
   headline", "fix my About", "my experience section", "profile score", "am I showing up for
   recruiters", "do I show up in AI search", "profile before and after". Not for deciding market
   position (use salience-positioning) or matching one job posting (use salience-career).
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Profile Intelligence

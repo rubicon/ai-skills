@@ -7,7 +7,7 @@ description: >-
   to an external system, or export data about other people. Triggers on "post this", "send it",
   "publish", "update my profile", "export my contacts". Not a content producer — it gates the
   actions other modules propose.
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Governance
@@ -64,6 +64,12 @@ Length   287 characters
 
 Reply "post" to publish, or tell me what to change.
 ```
+
+Before the card is even drafted, check the facts the content rests on. A fact marked
+`visibility: private` must not reach any external surface; `visibility: shared` must not reach a
+public one; `subject: organization` must not appear as a personal achievement. A restricted fact
+that gets as far as an approval card is a failure of the module that drafted it, not a decision to
+hand the user — remove it and say what the line lost.
 
 Requirements:
 - The exact content that will be sent, in full. Never a summary, never a truncation
