@@ -24,6 +24,10 @@ jobs:
         run: bash scripts/test-validate-skills.sh
       - name: Validate skill and plugin structure
         run: bash scripts/validate-skills.sh
+      - name: check-no-personal-data.sh test suite
+        run: bash scripts/test-check-no-personal-data.sh
+      - name: Check installed content carries no personal data
+        run: bash scripts/check-no-personal-data.sh
 
   validate-gates:
     runs-on: ubuntu-latest

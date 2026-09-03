@@ -22,7 +22,7 @@ Basic archives typically arrive within minutes; the full archive can take up to 
 Unzip and point Salience at the folder, or hand it individual CSVs.
 
 ```
-Here's my LinkedIn export: ~/Downloads/Basic_LinkedInDataExport_2026-09-02/
+Here's my LinkedIn export: <the unzipped export folder>
 ```
 
 Salience reads what it needs, shows the parse back for confirmation, and writes to the identity

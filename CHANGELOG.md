@@ -30,6 +30,13 @@ Versions use [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+- `scripts/check-no-personal-data.sh` and its test suite — CI now fails when installed content under
+  `skills/` or `plugins/` carries a contributor's absolute home path or a real email address. Wired
+  into the existing `validate-skills` job, so it is enforced on every PR. Root governance files stay
+  out of scope, since a maintainer contact address in `CODE_OF_CONDUCT.md` is deliberate.
+
+### Added
 - `salience` plugin (v0.2.0) — unified LinkedIn executive presence system: 12 modules behind one entry point (profile intelligence, identity/fact ledger, positioning, voice, content, engagement, executive career, consulting, data import, analytics, governance), a private out-of-repo data store, 8 templates, 4 adapter docs, 5 commands, career-corpus directory ingestion, and a 33-case evaluation suite
 - `session-messaging` plugin (v0.1.0) — cross-session messaging for Claude Code Desktop (CCD): a bundled skill covering `mcp__ccd_session_mgmt__send_message` addressing and session self-identification, plus two commands (`session-whoami`, `session-send`)
 - `rubicon-marketing-board` plugin listed as an external GitHub source (pinned to `v0.1.1`) — first marketplace entry sourced from a separate repo rather than vendored under `plugins/`

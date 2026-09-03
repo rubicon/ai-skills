@@ -43,6 +43,10 @@ imagined one. One of the findings is a schema gap, so this is a minor bump rathe
 
 ### Fixed
 
+- **A dated LinkedIn export path in `adapters/linkedin-import.md`** reproduced a real export folder
+  name. Replaced with a placeholder. Repo CI now runs `scripts/check-no-personal-data.sh` on every
+  PR, which catches absolute home paths and real email addresses in installed content — though not
+  this class, which is why the rule against transcribing examples is now written into `CLAUDE.md`.
 - **Shipped examples fingerprinted the real corpus they were validated against.** The survey example
   reproduced an actual directory tree with its real file counts and sizes, and a provenance example
   named a real press artifact. Every example is now invented, and no path, folder name, or count in
