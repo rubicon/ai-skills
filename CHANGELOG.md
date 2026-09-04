@@ -31,6 +31,8 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `codebase-memory` skill (v1.0.0) — query a codebase knowledge graph via MCP instead of grep: decision
+  matrix, exploration/tracing workflows, tiered evidence standards, and the full tool/edge-type reference
 - `scripts/check-no-personal-data.sh` and its test suite — CI now fails when installed content under
   `skills/` or `plugins/` carries a contributor's absolute home path or a real email address. Wired
   into the existing `validate-skills` job, so it is enforced on every PR. Root governance files stay
