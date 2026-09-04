@@ -10,7 +10,7 @@ description: >-
   export", "parse this", "pull this post", "look up this profile", "connect LinkedIn", "my career
   files are in", "point at this folder", "use my corpus". Not for writing profile copy (use
   salience-profile) or interpreting performance (use salience-analytics).
-version: 0.2.0
+version: 0.2.1
 ---
 
 # Data and Import
@@ -124,6 +124,34 @@ an audience that could check them. Extract numbers with their context intact.
 ### Post and engagement data
 Post bodies, comment threads, engagement rosters. Available at Tier 0 (paste), Tier 2 (own posts),
 or Tier 3.
+
+#### Engagement rosters by paste
+
+Who reacted to or commented on a post is real signal — someone who engaged is warmer than a cold
+contact — and there is no API for it. Every tool in the wild that offers it does so through a
+captured session, which Salience refuses. The paste path recovers the whole capability in about
+fifteen seconds and needs no credential:
+
+> Open the post's reactions or comments list on LinkedIn, select the list, copy, and paste it
+> here. I will parse and rank it.
+
+What arrives is messy — names, headlines, degree badges, and "Follow" buttons interleaved, often
+with duplicates where someone both reacted and commented. Parse leniently:
+
+- One person per name-plus-headline pair; drop UI chrome, follower counts, and button labels
+- Collapse duplicates, keeping the strongest engagement signal for that person
+- A commenter outranks a reactor. Someone who commented **and** reacted outranks both
+- Where the paste is ambiguous, say what did not parse rather than guessing at a name
+
+Then rank against what is already known: existing relationship records first, then people whose
+role matches what the user is pursuing, then the rest. Hand the result to `salience-engage` as a
+worklist.
+
+**These are other people's names, and governance's third-party rules apply in full.** Score the
+roster in the session; persist only the people the user actually acts on, with professional
+context only. A pasted roster of forty names is not a contact list to keep — retaining it whole
+would be exactly the cross-source aggregation about private individuals that governance forbids.
+Say so if the user asks to save it, and offer to keep the ones they contacted.
 
 ---
 

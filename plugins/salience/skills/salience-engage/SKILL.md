@@ -7,9 +7,10 @@ description: >-
   recommendations the user gives to other people. Triggers on "comment on this", "reply to this",
   "draft a connection request", "follow up with", "reconnect with", "who should I talk to", "what do
   I owe people", "networking plan", "note about this person", "write a recommendation for", "I owe
-  them a recommendation". Not for writing the user's own posts (use salience-content) or
+  them a recommendation", "worklist", "who should I reach out to this week", and a pasted list of
+  people who engaged with a post. Not for writing the user's own posts (use salience-content) or
   researching a hiring process (use salience-career).
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Engagement and Relationships
@@ -192,6 +193,67 @@ them as a person. The test: if this person read the note, would the relationship
 
 Never export or share relationship data about third parties without explicit approval — see
 `salience-governance`.
+
+---
+
+## Worklist
+
+The ranking above says who. A worklist carries them the rest of the way: **Salience prepares, the
+user sends, Salience reconciles.**
+
+Produce one when the user asks who to contact this week, asks for outreach they can act on, or
+has just pasted a roster. It is the default output shape for outbound engagement — a ranked list
+with no drafts leaves the user doing the assembly by hand every time.
+
+### Shape
+
+```
+Worklist — 6 people, about 15 minutes
+
+1. Priya Raghunathan — VP Marketing, Corvid Systems
+   Why now   She commented on your attribution post on the 2nd and asked a
+             direct question you have not answered.
+   Basis     Roster paste, 2026-09-02 · relationship record since 2023
+   Link      https://www.linkedin.com/feed/update/.../
+
+   > You asked how we handled the overlap between paid social and organic
+   > referral. Short version: we stopped trying to split credit and measured
+   > the two as one channel for a quarter. Happy to walk through what broke.
+
+2. ...
+```
+
+Each item carries the person, why them and why now, what the recommendation rests on, a direct
+link, and the message ready to send. Nothing else — a worklist that needs a second pass to become
+usable has failed.
+
+### Size
+
+Default 5–8 items. Cap at 10 unless the user asks for more and says why.
+
+The cap is not arbitrary and it is not a limitation to apologize for. A worklist is bounded by
+the user's attention because attention is what makes each message worth sending; the moment it is
+bounded by something else, it is a bulk sequence with manual labor added. If a user asks for
+sixty, say plainly that the value was never in the count, and offer the best ten.
+
+### Reconciling
+
+The user comes back with what happened, in their own words — "sent 1 through 4, skipped Priya,
+Marcus replied." Update the relationship records, and **stop resurfacing what was sent.** A
+worklist that re-suggests last week's contacts is worse than no worklist, because the user stops
+trusting the ordering.
+
+Where the user gives no report, reconcile from the next LinkedIn export rather than asking twice.
+
+### Salience is not the sender
+
+Every message in a worklist is sent by the user, in their own session, one at a time. Salience
+never sends, never schedules, and never asks for access that would let it.
+
+That is not a limitation working around a missing feature — it is the design. The throughput of
+this system is meant to be one person's judgment, and no approval card applies at the send step
+because Salience is not the one acting. What does still apply, to every draft in the list, is the
+screenshot test above.
 
 ---
 
