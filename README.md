@@ -31,6 +31,7 @@ skillshare install github.com/rubicon/ai-skills -s rubicon-wordpress-version-lab
 | [rubicon-wordpress-version-lab](skills/rubicon-wordpress-version-lab/SKILL.md) | Create and manage isolated Docker-only WordPress version test labs on an SSH-reachable host (e.g. a Synology NAS) via docker compose |
 | [identity-theft](skills/identity-theft/SKILL.md) | Steals fictional identities, not personal data — rewrites your text, Markdown, or HTML in a character's voice (Ron Swanson, Yoda, pirate, and 48 more) while code, links, and facts survive untouched |
 | [cache-money](skills/cache-money/SKILL.md) | Keep Claude Code sessions cheap and sharp — session hygiene, `CLAUDE.md` discipline, native auto-compaction controls, model selection, and context-cost habits |
+| [codebase-memory](skills/codebase-memory/SKILL.md) | Query a codebase knowledge graph via MCP instead of grep — callers, impact radius, architecture, dead code, and tiered evidence standards |
 
 ## Plugins
 
