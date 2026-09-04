@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [1.2.0](https://github.com/rubicon/ai-skills/compare/v1.1.1...v1.2.0) (2026-09-04)
+
+
+### Features
+
+* add codebase-memory skill ([#34](https://github.com/rubicon/ai-skills/issues/34)) ([fa88056](https://github.com/rubicon/ai-skills/commit/fa88056a161e6df6904192525ae2d90fa4c3c118)), closes [#33](https://github.com/rubicon/ai-skills/issues/33)
+* add Salience, a unified LinkedIn executive presence plugin ([#29](https://github.com/rubicon/ai-skills/issues/29)) ([57415c0](https://github.com/rubicon/ai-skills/commit/57415c02f721de838ed20e45f1f20271cdfdd518))
+* **salience:** read declared corpus authority; add fact subject and visibility ([#32](https://github.com/rubicon/ai-skills/issues/32)) ([bf7d6e3](https://github.com/rubicon/ai-skills/commit/bf7d6e31e6b5190885789cc01064595658c3fc19)), closes [#31](https://github.com/rubicon/ai-skills/issues/31)
+
 ## [1.1.1](https://github.com/rubicon/ai-skills/compare/v1.1.0...v1.1.1) (2026-09-02)
 
 
