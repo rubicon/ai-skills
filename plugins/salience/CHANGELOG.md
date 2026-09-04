@@ -7,6 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-04
+
+### Changed
+
+- `salience-governance` — the refusal list now covers **advising**, not only executing. Previously
+  every refused technique was written in terms of what Salience itself performs, so a request to
+  write the send cadence, the daily caps, or the sequence timing for the user to run in a
+  third-party automation tool passed through a list meant to block exactly that outcome.
+  "Write the sequence and I will run it in Dripify myself" is the same request with the
+  button-press moved. Selecting between automation vendors by how well they avoid detection is
+  refused for the same reason.
+
+  Two things explicitly stay allowed, so the rule does not overreach: explaining the mechanism
+  (why session-cookie reuse gets accounts restricted, how burst detection works), and building
+  the legitimate version of the underlying need — a prioritized list, drafted individually, sent
+  by the user.
+
+  Found by reviewing an advisory-only skill that never calls a tool itself but teaches the user
+  to run a scripted multi-step DM sequence and ranks vendors by a "safety rating."
+
+
 ## [0.2.0] - 2026-09-02
 
 Corrections from validating the corpus-ingestion method against a real career corpus rather than an
