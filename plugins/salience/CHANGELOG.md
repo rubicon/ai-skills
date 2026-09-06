@@ -7,6 +7,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-04
+
+### Added
+
+- `salience-engage` — **worklist**, the output shape for outbound engagement. Salience prepares,
+  the user sends, Salience reconciles. Each item carries the person, why them and why now, what
+  the recommendation rests on, a direct link, and the message ready to send. Default 5-8 items,
+  capped at 10: the list is bounded by the user's attention because attention is what makes each
+  message worth sending, and a list bounded by anything else is a bulk sequence with manual labor
+  added. Includes a reconciliation step so sent items stop resurfacing.
+
+- `salience-data` — **engagement rosters by paste**. Who reacted to or commented on a post is real
+  warm-lead signal with no API behind it, and every tool offering it in the wild uses a captured
+  session, which Salience refuses. The user copies the list out of LinkedIn's own UI and pastes
+  it; Salience parses leniently (commenters outrank reactors, duplicates collapse, unparsed lines
+  are reported rather than guessed at), ranks against existing relationship records, and hands the
+  result to `salience-engage`. Recovers the capability in about fifteen seconds with no credential.
+
+  Governance's third-party rules apply in full: score the roster in-session, persist only the
+  people the user actually acts on. Retaining a forty-name roster whole would be exactly the
+  cross-source aggregation about private individuals that governance forbids.
+
+  `salience-data` previously named roster paste as available at Tier 0 without saying how — a
+  capability claimed but not implemented.
+
 ## [0.2.1] - 2026-09-04
 
 ### Changed
