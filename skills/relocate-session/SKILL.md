@@ -20,6 +20,23 @@ memory silently stops loading. Nothing warns you.
 
 This is the procedure. Its only job is to finish the second half.
 
+## 0. Check the session can move at all
+
+`change_directory` refuses outright for a session running in an isolated worktree or on a
+remote host. Check before doing anything else — otherwise you do the whole memory procedure
+and then discover the move was never possible.
+
+```bash
+g=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null)
+c=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+[ -n "$g" ] && [ "$g" != "$c" ] && echo "WORKTREE — this session cannot be relocated."
+```
+
+If it cannot move, say so and stop. Do not reach for `request_directory` as a substitute: it
+grants access to a folder, it does not move the session, and it leaves memory keyed where it
+already was. The user's options are to start a session in the target directory, or to relocate
+a session that is not in a worktree.
+
 ## 1. Pick the scope
 
 Ask which one this is if it isn't obvious:
@@ -203,3 +220,5 @@ Always state these three, briefly. They are the parts that surprise people.
 | Using the short `[abc123]` display id as `session_id` | The message call fails. Use `sessionId` from `list_sessions`. |
 | Relative paths in the same turn as the move | They resolve against the old directory. |
 | Slugging `$PWD` inside a repo | In a subdirectory or a worktree that directory is always empty — memory belongs to the repo root. Resolve with `owner` first. |
+| Running the whole procedure in a worktree session | `change_directory` refuses at the end. Check step 0 first. |
+| Substituting `request_directory` for a refused move | It grants folder access; the session does not move and memory stays keyed to the old root. |
