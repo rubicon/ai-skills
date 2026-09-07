@@ -131,49 +131,31 @@ No ceremony.
 
 ## 4. Copy — never move, never overwrite
 
-First, the case that looks like a move but isn't one. If both ends resolve to the same
-memory directory — moving between a worktree and its main root, or into a subdirectory of the
-same repo — there is nothing to carry. Say so and skip to step 5. Do not run the copy.
+Run the script that ships with this skill. Pass it the two directories:
 
 ```bash
-[ "$SRC" = "$DST" ] && echo "Same memory directory — nothing to carry."
+"$SKILL_DIR/scripts/carry-memory.sh" "$SRC" "$DST"
 ```
 
-Otherwise: another session may already be working in the destination. Copy non-colliding
-files, merge the `MEMORY.md` index rather than replacing it, and report every collision.
+(`$SKILL_DIR` is the base directory reported when the skill loads.)
 
-```bash
-mkdir -p "$DST"
+It copies only — never moves, never overwrites. It reports every collision and keeps the
+destination's file, appends to `MEMORY.md` only the index lines the destination lacks,
+**checksum-verifies every copy**, prints `source=N destination=N copied=N collisions=N`, and
+short-circuits when the two paths are the same directory or the source has no memory.
 
-# Report collisions — these are NOT copied, the destination's version wins.
-for f in "$SRC"/*.md; do
-  b=$(basename "$f")
-  [ "$b" = "MEMORY.md" ] && continue
-  [ -e "$DST/$b" ] && echo "COLLISION (kept destination): $b"
-done
+**A non-zero exit means the copy did not verify. Do not relocate the session — report it.**
 
-cp -n "$SRC"/*.md "$DST"/ 2>/dev/null   # -n never clobbers
+> **Why this is a script and not inline code.** Skill text is rendered with the invocation's
+> argument substituted for the shell's zero positional parameter (dollar-zero). An inline
+> `awk` script referencing that variable therefore reaches you with the argument pasted in
+> where the field variable should be — malformed, silently producing no merged
+> index, while an existence-only check still reports success. That is silent memory-index loss
+> in exactly the scenario this skill exists to prevent. Code referencing dollar-zero must
+> live in a file. Do not move it back into the prose. (This paragraph avoids writing the
+> variable literally for the same reason.)
 
-# Merge index lines: keep the destination's MEMORY.md, append source lines it lacks.
-if [ -e "$SRC/MEMORY.md" ] && [ -e "$DST/MEMORY.md" ]; then
-  awk 'FNR==NR{seen[$0];next} /^[[:space:]]*-/ && !($0 in seen)' "$DST/MEMORY.md" "$SRC/MEMORY.md" > "$DST/.merge.tmp"
-  [ -s "$DST/.merge.tmp" ] && cat "$DST/.merge.tmp" >> "$DST/MEMORY.md"
-  rm -f "$DST/.merge.tmp"
-fi
-
-# Verify. Do not report success without this.
-for f in "$SRC"/*.md; do
-  b=$(basename "$f")
-  [ -e "$DST/$b" ] || echo "MISSING: $b"
-done
-
-# Count via glob, not `ls` — `ls` is aliased to eza on some machines and prints nothing.
-count() { set -- "$1"/*.md; [ -e "$1" ] && echo $# || echo 0; }
-echo "source=$(count "$SRC") destination=$(count "$DST")"
-```
-
-Report the collision list, the two counts, and any `MISSING:` line. A `MISSING:` line means
-the copy failed — stop and say so rather than moving the session on top of it.
+Report the collision list and the counts verbatim.
 
 ## 4b. Only if the disposition is move: remove the source
 
@@ -261,11 +243,16 @@ Always state these three, briefly. They are the parts that surprise people.
   project. Detect what is actually there; do not assume a particular name or layout, and do
   not claim a list like this is complete:
 
+  Directories only, and skip anything git tracks — a tracked dotdir like `.github` or
+  `.claude-plugin` is repo content, not agent state. A fixed denylist would always be
+  incomplete; "is it version-controlled" is the distinction that actually holds.
+
   ```bash
-  # Directories only — a dotfile like .gitignore is repo content, not agent state.
-  find "$OLD" -maxdepth 1 -type d -name '.*' \
-       -not -name '.git' -not -name '.github' -not -path "$OLD" -print 2>/dev/null
-  [ -d "$OLD/.claude/agent-memory" ] && echo "$OLD/.claude/agent-memory"
+  find "$OLD" -maxdepth 1 -type d -name '.*' -not -name '.git' -not -path "$OLD" -print 2>/dev/null |
+    while IFS= read -r d; do
+      git -C "$OLD" ls-files --error-unmatch "${d##*/}" >/dev/null 2>&1 || echo "$d"
+    done
+  [ -d "$OLD/.claude/agent-memory" ] && echo "$OLD/.claude/agent-memory" || true
   ```
 
   Report whatever turns up and let the user decide per item. Leaving it behind is usually
@@ -306,6 +293,8 @@ Always state these three, briefly. They are the parts that surprise people.
 | Overwriting `MEMORY.md` | The destination's index is destroyed; its memories stay on disk but stop being loaded. |
 | Using the short `[abc123]` display id as `session_id` | The message call fails. Use `sessionId` from `list_sessions`. |
 | Relative paths in the same turn as the move | They resolve against the old directory. |
+| Putting code that references dollar-zero in the skill prose | The invocation argument is substituted for it, silently corrupting the code. Keep such code in `scripts/`. |
+| Verifying a copy by existence alone | A truncated file and a deliberately skipped collision both look like success. Compare checksums. |
 | Slugging `$PWD` inside a repo | In a subdirectory or a worktree that directory is always empty — memory belongs to the repo root. Resolve with `owner` first. |
 | Running the whole procedure in a worktree session | `change_directory` refuses at the end. Check step 0 first. |
 | Substituting `request_directory` for a refused move | It grants folder access; the session does not move and memory stays keyed to the old root. |

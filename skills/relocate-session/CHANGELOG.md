@@ -7,6 +7,9 @@ The version tracks the `version:` field in `SKILL.md`.
 ## [Unreleased]
 
 ## [1.0.0] — 2026-09-07
+- `scripts/carry-memory.sh` performs the copy, index merge and checksum verification.
+  It is a script rather than inline prose because skill text substitutes the invocation
+  argument for `$0`, which corrupts awk.
 - Initial release: procedure for relocating a Claude Code session or a whole project
   directory, carrying auto-memory across `~/.claude/projects/<slugified-cwd>/memory/`.
   Covers the up-front check that the session can move at all (a worktree
