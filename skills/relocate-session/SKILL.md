@@ -266,13 +266,21 @@ Always state these three, briefly. They are the parts that surprise people.
   Report whatever turns up and let the user decide per item. Leaving it behind is usually
   correct — it belongs to that project's work, and copying it mixes unrelated contexts.
   **Never move any of it silently.**
-- **The transcript** — the session's conversation continues seamlessly, but the transcript
-  file on disk stays in the project directory the session *started* in, and keeps being
-  appended there after the move. The destination never gets its own project directory from
-  this session. Practical effect: the history is filed under the old project, so resuming or
-  searching for this session later means looking there, not at the new path. Nothing can be
-  done about it — do not try to move a live transcript file — but say it, because a user who
-  moved a session to stop polluting the old project will assume the history went with it.
+- **The transcript does follow** — this is the one thing the harness carries for you. The
+  session's `.jsonl` is re-filed under the destination project directory, keeping the entries
+  written before the move, and appending continues there. So the history is resumable and
+  searchable from the new path, and the old project is not left holding it. Confirm it rather
+  than assuming — on the turn after the move:
+
+  ```bash
+  find "$HOME/.claude/projects/$(slug "$(owner "$NEW")")" -maxdepth 1 -name '*.jsonl' | head
+  ```
+
+  Older releases left a partial copy behind at the origin instead of moving cleanly. If you
+  find one, it is a stale prefix of the real transcript — report it, do not delete it.
+
+  Memory is the thing that does *not* follow. That asymmetry is the whole reason this skill
+  exists: history moves itself, memory does not, and only one of them announces itself.
 - **Environment variables** — anything the old directory's settings exported is already in
   the process and cannot be unset by moving. The new directory's settings env applies on top
   of it, it does not replace it.
