@@ -33,20 +33,34 @@ Both scopes run the same copy. Only the reporting differs.
 
 ## 2. Resolve both memory directories
 
-The slug is the absolute path with **every character outside `[a-zA-Z0-9]` replaced by `-`**,
+The source is **the running session's own working directory**. Derive it — never hardcode a
+path, and never carry one over from a previous run of this skill.
+
+The slug is that absolute path with **every character outside `[a-zA-Z0-9]` replaced by `-`**,
 including the leading `/`. Dots, slashes, spaces, underscores and tildes all become `-`.
+Illustrative only:
+
+| Absolute path | Project directory |
+|---|---|
+| `/Users/someone/dev/example.com/proj` | `-Users-someone-dev-example-com-proj` |
+| `/Users/someone/Local Sites/my_app` | `-Users-someone-Local-Sites-my-app` |
+
+The second row is the one that catches people: a rule that only maps `/` and `.` looks correct
+until a path contains a space, an underscore or a tilde.
 
 ```bash
 slug() { python3 -c 'import re,sys; print(re.sub(r"[^a-zA-Z0-9]","-",sys.argv[1]))' "$1"; }
-SRC="$HOME/.claude/projects/$(slug "$OLD_ABS_PATH")/memory"
-DST="$HOME/.claude/projects/$(slug "$NEW_ABS_PATH")/memory"
+OLD="$PWD"                  # the session's own cwd — derived, not supplied
+NEW="<absolute target path>" # the only input this skill takes
+SRC="$HOME/.claude/projects/$(slug "$OLD")/memory"
+DST="$HOME/.claude/projects/$(slug "$NEW")/memory"
 ```
 
 **Verify, do not assume.** If `$SRC` does not exist, do not conclude there is no memory —
 find the directory by inspection instead. Every transcript records its own `cwd`:
 
 ```bash
-grep -l -F "\"cwd\":\"$OLD_ABS_PATH\"" "$HOME"/.claude/projects/*/*.jsonl | head
+grep -l -F "\"cwd\":\"$OLD\"" "$HOME"/.claude/projects/*/*.jsonl | head
 ```
 
 A session that has already been relocated keeps its transcripts in the directory it started
@@ -126,9 +140,18 @@ Do this last. If the memory copy failed, you have not moved yet.
 
 Always state these three, briefly. They are the parts that surprise people.
 
-- **`.remember/`** — lives inside the repo, so it stays with the old one. That is usually
-  correct: it belongs to that project's work, and copying it mixes unrelated contexts.
-  Surface it as a decision for the user. **Never move it silently.**
+- **Repo-local agent state** — anything an agent keeps *inside* the project stays with the
+  project. Detect what is actually there; do not assume a particular name or layout, and do
+  not claim a list like this is complete:
+
+  ```bash
+  find "$OLD" -maxdepth 1 -name '.*' -not -name '.git' -not -path "$OLD" -print 2>/dev/null
+  [ -d "$OLD/.claude/agent-memory" ] && echo "$OLD/.claude/agent-memory"
+  ```
+
+  Report whatever turns up and let the user decide per item. Leaving it behind is usually
+  correct — it belongs to that project's work, and copying it mixes unrelated contexts.
+  **Never move any of it silently.**
 - **Environment variables** — anything the old directory's settings exported is already in
   the process and cannot be unset by moving. The new directory's settings env applies on top
   of it, it does not replace it.

@@ -11,5 +11,5 @@ The version tracks the `version:` field in `SKILL.md`.
   directory, carrying auto-memory across `~/.claude/projects/<slugified-cwd>/memory/`.
   Covers the slugification rule and its verification fallback, a copy that never moves and
   never overwrites, `MEMORY.md` index merging, destination verification, occupied-target
-  handling via `list_sessions`, and a report of what does not follow the move (`.remember/`,
-  process environment variables) versus what switches automatically.
+  handling via `list_sessions`, and and a report of what does not follow the move (detected repo-local
+  agent state, process environment variables) versus what switches automatically.
