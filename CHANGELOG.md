@@ -31,6 +31,10 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `relocate-session` skill (v1.0.0) — relocate a Claude Code session, or a whole project
+  directory, without silently orphaning auto-memory: slugification rule and its verification
+  fallback, a copy that never moves and never overwrites, `MEMORY.md` index merging, and a
+  report of what does not follow the move
 - `codebase-memory` skill (v1.0.0) — query a codebase knowledge graph via MCP instead of grep: decision
   matrix, exploration/tracing workflows, tiered evidence standards, and the full tool/edge-type reference
 - `scripts/check-no-personal-data.sh` and its test suite — CI now fails when installed content under

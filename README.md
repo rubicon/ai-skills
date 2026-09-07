@@ -32,6 +32,7 @@ skillshare install github.com/rubicon/ai-skills -s rubicon-wordpress-version-lab
 | [identity-theft](skills/identity-theft/SKILL.md) | Steals fictional identities, not personal data — rewrites your text, Markdown, or HTML in a character's voice (Ron Swanson, Yoda, pirate, and 48 more) while code, links, and facts survive untouched |
 | [cache-money](skills/cache-money/SKILL.md) | Keep Claude Code sessions cheap and sharp — session hygiene, `CLAUDE.md` discipline, native auto-compaction controls, model selection, and context-cost habits |
 | [codebase-memory](skills/codebase-memory/SKILL.md) | Query a codebase knowledge graph via MCP instead of grep — callers, impact radius, architecture, dead code, and tiered evidence standards |
+| [relocate-session](skills/relocate-session/SKILL.md) | Move a session or a whole project directory to a new path without silently orphaning auto-memory — carries it across, verifies it, and reports what stays behind |
 
 ## Plugins
 
