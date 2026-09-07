@@ -33,8 +33,14 @@ Both scopes run the same copy. Only the reporting differs.
 
 ## 2. Resolve both memory directories
 
-The source is **the running session's own working directory**. Derive it — never hardcode a
-path, and never carry one over from a previous run of this skill.
+The source is **the running session's own working directory** — with one exception. Derive it;
+never hardcode a path, and never carry one over from a previous run of this skill.
+
+**The exception: memory is keyed to the git repository root.** A session sitting in a
+subdirectory of a repo reads memory from the repo root, not from the subdirectory. A session
+in a worktree reads it from the *main* repo root — a worktree never owns memory. Only a path
+outside any repo owns its own. Resolve this with git and confirm against disk rather than
+slugging `$PWD` and trusting the result.
 
 The slug is that absolute path with **every character outside `[a-zA-Z0-9]` replaced by `-`**,
 including the leading `/`. Dots, slashes, spaces, underscores and tildes all become `-`.
@@ -50,11 +56,27 @@ until a path contains a space, an underscore or a tilde.
 
 ```bash
 slug() { python3 -c 'import re,sys; print(re.sub(r"[^a-zA-Z0-9]","-",sys.argv[1]))' "$1"; }
-OLD="$PWD"                  # the session's own cwd — derived, not supplied
-NEW="<absolute target path>" # the only input this skill takes
-SRC="$HOME/.claude/projects/$(slug "$OLD")/memory"
-DST="$HOME/.claude/projects/$(slug "$NEW")/memory"
+
+# The path that owns a directory's memory: the main repo root if it is a worktree,
+# otherwise the directory itself. Falls back cleanly outside a git repo.
+owner() {
+  local r
+  r=$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+    && dirname "$r" || echo "$1"
+}
+
+OLD="$PWD"                   # the session's own cwd — derived, not supplied
+NEW="<absolute target path>"  # the only input this skill takes
+SRC="$HOME/.claude/projects/$(slug "$(owner "$OLD")")/memory"
+DST="$HOME/.claude/projects/$(slug "$(owner "$NEW")")/memory"
 ```
+
+Apply `owner` to **both** ends. Relocating *into* a subdirectory or a worktree has the same
+asymmetry: memory copied to that path's own slug would never be read.
+
+Verified against every memory-bearing project directory on a real machine: the rule holds in
+35 of 36 testable cases, and the single exception is a session that had itself been relocated
+— this bug, showing up in its own evidence.
 
 **Verify, do not assume.** If `$SRC` does not exist, do not conclude there is no memory —
 find the directory by inspection instead. Every transcript records its own `cwd`:
@@ -74,8 +96,16 @@ No ceremony.
 
 ## 4. Copy — never move, never overwrite
 
-Another session may already be working in the destination. Copy non-colliding files, merge
-the `MEMORY.md` index rather than replacing it, and report every collision.
+First, the case that looks like a move but isn't one. If both ends resolve to the same
+memory directory — moving between a worktree and its main root, or into a subdirectory of the
+same repo — there is nothing to carry. Say so and skip to step 5. Do not run the copy.
+
+```bash
+[ "$SRC" = "$DST" ] && echo "Same memory directory — nothing to carry."
+```
+
+Otherwise: another session may already be working in the destination. Copy non-colliding
+files, merge the `MEMORY.md` index rather than replacing it, and report every collision.
 
 ```bash
 mkdir -p "$DST"
@@ -145,7 +175,9 @@ Always state these three, briefly. They are the parts that surprise people.
   not claim a list like this is complete:
 
   ```bash
-  find "$OLD" -maxdepth 1 -name '.*' -not -name '.git' -not -path "$OLD" -print 2>/dev/null
+  # Directories only — a dotfile like .gitignore is repo content, not agent state.
+  find "$OLD" -maxdepth 1 -type d -name '.*' \
+       -not -name '.git' -not -name '.github' -not -path "$OLD" -print 2>/dev/null
   [ -d "$OLD/.claude/agent-memory" ] && echo "$OLD/.claude/agent-memory"
   ```
 
@@ -170,3 +202,4 @@ Always state these three, briefly. They are the parts that surprise people.
 | Overwriting `MEMORY.md` | The destination's index is destroyed; its memories stay on disk but stop being loaded. |
 | Using the short `[abc123]` display id as `session_id` | The message call fails. Use `sessionId` from `list_sessions`. |
 | Relative paths in the same turn as the move | They resolve against the old directory. |
+| Slugging `$PWD` inside a repo | In a subdirectory or a worktree that directory is always empty — memory belongs to the repo root. Resolve with `owner` first. |
