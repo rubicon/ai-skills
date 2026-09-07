@@ -235,6 +235,19 @@ that session's own window. Say so rather than reporting the relocation as comple
 
 Do this last. If the memory copy failed, you have not moved yet.
 
+**Confirm the move actually took effect — the tool's acknowledgement is not proof.** It
+returns "the working directory will move when the current turn ends", which is a promise about
+the future, not a result. On your next turn:
+
+```bash
+pwd     # must equal the target; if it does not, the move did not take effect
+```
+
+Observed at least once: approval granted, the call acknowledged, and a turn boundary passed
+with the session still in the original directory. If `pwd` disagrees with the target, say the
+relocation did not happen rather than reporting success — the memory copy will have succeeded
+regardless, which makes a silent failure here especially easy to miss.
+
 ## 7. Report what did not follow
 
 Always state these three, briefly. They are the parts that surprise people.
