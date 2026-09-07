@@ -191,6 +191,18 @@ pass. If any fails, keep the source, say which gate failed, and treat the result
    repo root, so a repo with worktrees almost always fails this gate.
 4. **The user confirmed the deletion**, after seeing the file list from gate 2.
 
+The commonest reason to want a move is *"I started this session in the wrong project."* In
+that case only the memories **this session created** are pollution — everything the old
+project had before belongs to it and must stay. Do not delete the whole copied set. List the
+source files with modification times, separate the ones that predate this session's work, and
+confirm the shorter list:
+
+```bash
+find "$SRC" -maxdepth 1 -name '*.md' -exec stat -f '%Sm  %N' -t '%Y-%m-%d %H:%M' {} \;
+```
+
+(`stat -f` is the BSD/macOS form; `stat -c '%y %n'` on GNU.)
+
 ```bash
 # Only the files that were verifiably copied AND did not collide.
 for f in "$SRC"/*.md; do
@@ -254,6 +266,13 @@ Always state these three, briefly. They are the parts that surprise people.
   Report whatever turns up and let the user decide per item. Leaving it behind is usually
   correct — it belongs to that project's work, and copying it mixes unrelated contexts.
   **Never move any of it silently.**
+- **The transcript** — the session's conversation continues seamlessly, but the transcript
+  file on disk stays in the project directory the session *started* in, and keeps being
+  appended there after the move. The destination never gets its own project directory from
+  this session. Practical effect: the history is filed under the old project, so resuming or
+  searching for this session later means looking there, not at the new path. Nothing can be
+  done about it — do not try to move a live transcript file — but say it, because a user who
+  moved a session to stop polluting the old project will assume the history went with it.
 - **Environment variables** — anything the old directory's settings exported is already in
   the process and cannot be unset by moving. The new directory's settings env applies on top
   of it, it does not replace it.
