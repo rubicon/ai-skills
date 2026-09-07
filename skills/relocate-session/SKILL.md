@@ -246,6 +246,11 @@ mcp__ccd_directory__change_directory  path: <absolute target path>
 The working directory only takes effect when the turn ends, so **every path used in the same
 turn must be absolute** — relative paths still resolve against the old directory.
 
+**This call needs the user's approval** and the session pauses on it until they answer. If you
+are driving another session remotely, that is where it will appear to stall: the memory work
+is done, the move is queued, and nothing further happens until someone approves the folder in
+that session's own window. Say so rather than reporting the relocation as complete.
+
 Do this last. If the memory copy failed, you have not moved yet.
 
 ## 7. Report what did not follow
