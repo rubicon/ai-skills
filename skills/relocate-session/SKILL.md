@@ -37,9 +37,27 @@ grants access to a folder, it does not move the session, and it leaves memory ke
 already was. The user's options are to start a session in the target directory, or to relocate
 a session that is not in a worktree.
 
-## 1. Pick the scope
+## 1. Pick the scope and the disposition
 
-Ask which one this is if it isn't obvious:
+**Ask both, every time. Never assume either one**, even when the move looks routine.
+
+### Disposition — what happens to the old memory
+
+| Disposition | Meaning |
+|---|---|
+| **Copy** (default) | Both locations keep the memory. The old one still works. |
+| **Move** | Copy, verify, *then* remove the source. Only ever performed as copy-then-remove, never as `mv`, and only when the gates in step 4b all pass. |
+
+Default to copy and say that you are. The asymmetry is the reason: a stray copy leaves a
+duplicate the user can see and delete, while a wrong move destroys memory that is not in
+version control, from the one location that was working, with no undo.
+
+The trap that makes move dangerous is not obvious: **memory directories are routinely shared.**
+Because memory is keyed to the repo root, every session in that repo — including every
+worktree session, which never has memory of its own — reads the *same* directory. "The old
+path" is very often still in active use by someone else.
+
+### Scope — what kind of move this is
 
 | Scope | Meaning | What changes |
 |---|---|---|
@@ -157,6 +175,41 @@ echo "source=$(count "$SRC") destination=$(count "$DST")"
 Report the collision list, the two counts, and any `MISSING:` line. A `MISSING:` line means
 the copy failed — stop and say so rather than moving the session on top of it.
 
+## 4b. Only if the disposition is move: remove the source
+
+Never `mv`, and never delete anything before the copy has been verified. All four gates must
+pass. If any fails, keep the source, say which gate failed, and treat the result as a copy.
+
+1. **Verification was clean.** No `MISSING:` line in step 4, and the destination count is at
+   least the source count. A failed copy plus a deletion is data loss.
+2. **Skip every file that collided.** A collision means the destination already had a
+   *different* file under that name and kept its own. Deleting the source copy destroys the
+   only version of that memory. Collided files stay put — say so.
+3. **No other session shares the source.** Run `list_sessions` and resolve each session's
+   `cwd` through `owner`. If any other session resolves to the same owner as the source, do
+   not delete: they are reading that directory. Remember that worktree sessions resolve to the
+   repo root, so a repo with worktrees almost always fails this gate.
+4. **The user confirmed the deletion**, after seeing the file list from gate 2.
+
+```bash
+# Only the files that were verifiably copied AND did not collide.
+for f in "$SRC"/*.md; do
+  b=$(basename "$f")
+  [ "$b" = "MEMORY.md" ] && continue                      # index is merged, never deleted
+  [ -e "$DST/$b" ] || { echo "KEPT (not copied): $b"; continue; }
+  cmp -s "$f" "$DST/$b" || { echo "KEPT (collided, differs): $b"; continue; }
+  rm -- "$f" && echo "removed: $b"
+done
+```
+
+`cmp` is what makes this safe: it deletes a source file only when the destination holds an
+identical copy. A collided file differs, so it is kept automatically even if gate 2 was
+misread.
+
+Leave `MEMORY.md` alone. Its lines were merged into the destination, but the source index
+still describes whatever memory remains at the source. Prune its entries for removed files
+rather than deleting the file.
+
 ## 5. Check whether the target is already occupied
 
 ```
@@ -214,7 +267,9 @@ Always state these three, briefly. They are the parts that surprise people.
 |---|---|
 | Calling `change_directory` and stopping there | Memory silently stops loading. This is the whole reason the skill exists. |
 | Assuming the slug and skipping verification | You copy into a directory nothing reads, and report success. |
-| `mv` instead of `cp` | The old session loses its memory mid-flight. |
+| `mv` instead of `cp` | The old session loses its memory mid-flight. Even a move is copy-verify-remove. |
+| Defaulting to move, or not asking | Memory directories are shared across every session in a repo, worktrees included. The deletion hits sessions you never considered. |
+| Deleting a collided source file | The destination kept its own different file of that name, so the source version is the only copy and it is gone. |
 | `cp` without `-n` | You overwrite another session's memory files. |
 | Overwriting `MEMORY.md` | The destination's index is destroyed; its memories stay on disk but stop being loaded. |
 | Using the short `[abc123]` display id as `session_id` | The message call fails. Use `sessionId` from `list_sessions`. |

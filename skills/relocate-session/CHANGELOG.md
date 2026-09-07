@@ -12,7 +12,7 @@ The version tracks the `version:` field in `SKILL.md`.
   Covers the up-front check that the session can move at all (a worktree
   or remote session cannot), the slugification rule, the fact that memory is keyed to the git
   repository root (so a worktree or a subdirectory never owns its own), the same-directory
-  short circuit, the verification fallback, a copy that never moves and
-  never overwrites, `MEMORY.md` index merging, destination verification, occupied-target
+  short circuit, the verification fallback, a copy/move disposition asked every time and defaulting to copy
+  (move is copy-verify-remove behind four gates, never `mv`), a copy that never overwrites, `MEMORY.md` index merging, destination verification, occupied-target
   handling via `list_sessions`, and and a report of what does not follow the move (detected repo-local
   agent state, process environment variables) versus what switches automatically.
