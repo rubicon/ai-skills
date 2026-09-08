@@ -29,7 +29,11 @@ and then discover the move was never possible.
 ```bash
 g=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null)
 c=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-[ -n "$g" ] && [ "$g" != "$c" ] && echo "WORKTREE — this session cannot be relocated."
+if [ -n "$g" ] && [ "$g" != "$c" ]; then
+  echo "WORKTREE — this session cannot be relocated."
+else
+  echo "not a worktree — the session can move."
+fi
 ```
 
 If it cannot move, say so and stop. Do not reach for `request_directory` as a substitute: it

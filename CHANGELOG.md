@@ -32,9 +32,10 @@ Versions use [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `relocate-session` skill (v1.0.0) — relocate a Claude Code session, or a whole project
-  directory, without silently orphaning auto-memory: slugification rule and its verification
-  fallback, a copy that never moves and never overwrites, `MEMORY.md` index merging, and a
-  report of what does not follow the move
+  directory, without silently orphaning auto-memory: memory is keyed to the git repository
+  root, a copy/move disposition asked on every run and defaulting to copy, a bundled
+  `scripts/carry-memory.sh` that copies with checksum verification and merges the `MEMORY.md`
+  index without duplicating entries, and a report of what does and does not follow the move
 - `codebase-memory` skill (v1.0.0) — query a codebase knowledge graph via MCP instead of grep: decision
   matrix, exploration/tracing workflows, tiered evidence standards, and the full tool/edge-type reference
 - `scripts/check-no-personal-data.sh` and its test suite — CI now fails when installed content under
@@ -42,8 +43,7 @@ Versions use [Semantic Versioning](https://semver.org/).
   into the existing `validate-skills` job, so it is enforced on every PR. Root governance files stay
   out of scope, since a maintainer contact address in `CODE_OF_CONDUCT.md` is deliberate.
 
-### Added
-- `salience` plugin (v0.2.0) — unified LinkedIn executive presence system: 12 modules behind one entry point (profile intelligence, identity/fact ledger, positioning, voice, content, engagement, executive career, consulting, data import, analytics, governance), a private out-of-repo data store, 8 templates, 4 adapter docs, 5 commands, career-corpus directory ingestion, and a 33-case evaluation suite
+ `salience` plugin (v0.2.0) — unified LinkedIn executive presence system: 12 modules behind one entry point (profile intelligence, identity/fact ledger, positioning, voice, content, engagement, executive career, consulting, data import, analytics, governance), a private out-of-repo data store, 8 templates, 4 adapter docs, 5 commands, career-corpus directory ingestion, and a 33-case evaluation suite
 - `session-messaging` plugin (v0.1.0) — cross-session messaging for Claude Code Desktop (CCD): a bundled skill covering `mcp__ccd_session_mgmt__send_message` addressing and session self-identification, plus two commands (`session-whoami`, `session-send`)
 - `rubicon-marketing-board` plugin listed as an external GitHub source (pinned to `v0.1.1`) — first marketplace entry sourced from a separate repo rather than vendored under `plugins/`
 - `cache-money` skill (v1.1.0) — Claude Code token/context-management practices for cheaper, sharper sessions

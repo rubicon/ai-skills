@@ -10,16 +10,25 @@ Compatible with [skillshare](https://github.com/runkids/skillshare) — a CLI fo
 
 Skills are loaded on demand via the `Skill` tool. Each skill lives at `skills/<skill-name>/SKILL.md`.
 
+**A skill in this repository is not available to Claude Code until it is installed.** Claude Code
+loads skills from `~/.claude/skills/` (personal) and `<project>/.claude/skills/` (project) — not
+from this repository's top-level `skills/` directory, which is the layout skillshare expects.
+Install with the commands below, then start a new session.
+
 ### skillshare CLI
 
 ```bash
 # Install all skills (tracked — stays updatable)
 skillshare install github.com/rubicon/ai-skills --track
 
-# Install specific skills (-s accepts a comma-separated list)
-skillshare install github.com/rubicon/ai-skills -s secret-santa-generator
-skillshare install github.com/rubicon/ai-skills -s work-evidence-research
-skillshare install github.com/rubicon/ai-skills -s rubicon-wordpress-version-lab
+# Install one skill
+skillshare install github.com/rubicon/ai-skills -s relocate-session
+
+# Install several (-s accepts a comma-separated list)
+skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory
+
+# Every skill published here
+skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory,identity-theft,relocate-session,rubicon-wordpress-version-lab,secret-santa-generator,work-evidence-research
 ```
 
 ## Skills

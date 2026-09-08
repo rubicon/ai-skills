@@ -26,6 +26,11 @@ fi
 
 mkdir -p "$DST"
 rc=0 copied=0 collided=0
+# Basenames the destination kept its own different version of. Their source
+# index lines must NOT be merged: the destination already indexes that name,
+# and the source's line would describe content that is not at that path.
+collided_names=$(mktemp)
+trap 'rm -f "$collided_names"' EXIT
 
 while IFS= read -r f; do
   b=${f##*/}
@@ -35,6 +40,7 @@ while IFS= read -r f; do
       echo "already present, identical: $b"
     else
       echo "COLLISION (kept destination): $b"
+      printf '%s\n' "$b" >> "$collided_names"
       collided=$((collided + 1))
     fi
     continue
@@ -55,6 +61,15 @@ if [ -e "$SRC/MEMORY.md" ]; then
     tmp=$(mktemp)
     awk 'FNR==NR{seen[$0];next} /^[[:space:]]*-/ && !($0 in seen)' \
         "$DST/MEMORY.md" "$SRC/MEMORY.md" > "$tmp"
+    # Drop candidate lines that name a collided file.
+    if [ -s "$collided_names" ] && [ -s "$tmp" ]; then
+      before=$(wc -l < "$tmp" | tr -d ' ')
+      grep -F -v -f "$collided_names" "$tmp" > "$tmp.keep" || true
+      mv -- "$tmp.keep" "$tmp"
+      after=$(wc -l < "$tmp" | tr -d ' ')
+      [ "$before" -ne "$after" ] &&
+        echo "MEMORY.md: skipped $((before - after)) index line(s) for collided file(s)"
+    fi
     if [ -s "$tmp" ]; then
       cat "$tmp" >> "$DST/MEMORY.md"
       echo "MEMORY.md: appended $(wc -l < "$tmp" | tr -d ' ') index line(s)"
