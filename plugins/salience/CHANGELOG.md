@@ -7,6 +7,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-08
+
+### Added
+
+- `salience-governance` — two missing rows in the approval matrix. **Deleting a live post or
+  comment** is a third distinct action from editing the profile and from deleting local store
+  data, irreversible in a way neither of the others is, and it now gates per item with the full
+  text shown. **Removing or unfollowing a connection** was gated in one direction only — sending a
+  request was blocked, severing one fell through the matrix entirely. It now gates per person,
+  never in bulk.
+
+- `salience-governance` — the approval card handles the two cases its spec assumed away. An action
+  with **no previewable payload** (a reaction) gets a card that names the action and target rather
+  than no card at all; a missing payload is not a missing gate. And **platform side effects now go
+  on the card**: at least one LinkedIn integration auto-likes a post as a side effect of
+  publishing it, meaning the user approved a publish and got a reaction they never agreed to.
+  Where the integration's behavior is not known with certainty, the card says so rather than
+  implying more knowledge than there is. An approval system that hides a side effect is worse
+  than none, because it is trusted.
+
+- `salience-governance` — **never construct contact data.** The evidence contract's never-invent
+  list covers employer, title, dates, metrics, clients, awards and credentials, and did not reach
+  email addresses or phone numbers. A guessed address is not a claim the user can check before it
+  goes out — it either bounces or reaches a stranger under the user's name. When a lookup returns
+  nothing, report the absence and stop. Cross-referenced from the evidence contract, with the rule
+  itself in third-party data, where the harm actually lands.
+
+
 ## [0.3.0] - 2026-09-04
 
 ### Added
