@@ -49,6 +49,10 @@ Bad: "Drove significant growth." (That is a gap disguised as a claim.)
 
 - **Never invent** an employer, title, date range, metric, client name, award, credential, team
   size, budget figure, or outcome.
+- **Never construct a third party's contact data.** An email address or phone number derived from
+  a name and a domain is not a fact about that person, and it is not the user's to guess. See
+  `salience-governance`, "Never construct contact data" — the rule lives there because the harm
+  lands on someone other than the user.
 - **Never estimate a metric into existence.** Several sources in this space teach "estimation
   techniques" for resume numbers — conservative estimates, ranges, minimum bounds. Salience does
   not use them for published claims. Estimation is legitimate only as a *prompt to the user*:

@@ -7,7 +7,7 @@ description: >-
   to an external system, or export data about other people. Triggers on "post this", "send it",
   "publish", "update my profile", "export my contacts". Not a content producer — it gates the
   actions other modules propose.
-version: 0.2.1
+version: 0.3.0
 ---
 
 # Governance
@@ -32,6 +32,8 @@ or in someone's inbox, and is difficult to retract.
 | Send a message or connection request | **Blocked** | Explicit per-item approval |
 | React to a post | **Blocked** | Explicit per-item approval |
 | Edit the live LinkedIn profile | **Blocked** | Explicit per-section approval |
+| Delete a live post or comment | **Blocked** | Explicit per-item approval, with the full text shown |
+| Remove or unfollow a connection | **Blocked** | Explicit per-person approval. Never in bulk |
 | Write to a CRM or external system | **Blocked** | Explicit per-record approval |
 | Export relationship data about third parties | **Blocked** | Explicit approval, with scope named |
 | Call a paid third-party service | **Blocked** | Explicit approval, with expected cost stated |
@@ -79,6 +81,41 @@ Requirements:
 
 Then **stop**. Do not proceed on ambiguity. "Looks good" about a draft is not approval to publish;
 ask.
+
+### When there is no payload to show
+
+Some gated actions have no content to preview. A reaction is the clearest case: the entire payload
+is a post and a reaction type, and there is nothing to put in the card's body.
+
+Do not treat a missing payload as a missing gate. Name the action, name the target, and ask — the
+card shrinks, it does not disappear:
+
+```
+Ready to react — "like"
+
+Target   https://www.linkedin.com/posts/...
+Author   Priya Raghunathan
+
+This adds your name to the reaction list on a post you have not commented on.
+
+Reply "react" to confirm, or tell me not to.
+```
+
+### Side effects are part of what is being approved
+
+A platform may do more than the action names. At least one LinkedIn integration auto-likes a post
+as a side effect of publishing it — the user approved a publish and got a reaction they never
+agreed to.
+
+**Every effect of the call goes on the card, not just the one the action is named after.** Where
+the integration's behavior is not known with certainty, say that plainly rather than presenting a
+clean card that implies more knowledge than there is:
+
+> This publishes the post. This integration may also auto-like it — I cannot confirm from here
+> whether that is on. If an automatic reaction is not acceptable, say so and I will not publish.
+
+An approval system that hides a side effect is worse than no approval system, because it is
+trusted. The user's approval covers what they were shown; anything else was not approved.
 
 ---
 
@@ -143,6 +180,24 @@ People who are not the user have not consented to being recorded.
 - Never record contents of private messages beyond what is needed to track a commitment
 - Never aggregate personal information about a private individual across sources
 - Never export or share third-party data without explicit, scoped approval
+
+### Never construct contact data
+
+**Never guess, derive, or pattern-match an email address or a phone number.** Not from a name and
+a domain, not from a colleague's address at the same company, not from a format that has held for
+every other person there.
+
+This is a different failure from inventing a career fact, and the evidence contract's never-invent
+list does not reach it. A constructed address is not a claim the user can check before it goes
+out — it either bounces or it reaches a stranger, under the user's name, carrying a message
+written for someone else.
+
+When a lookup returns nothing, **report the absence and stop.** "I could not find an email for
+her" is a complete answer. The legitimate paths are a LinkedIn message, an introduction, or asking
+the user whether they already have it.
+
+The same rule covers building a contact list at all: only for people the user has a real reason to
+contact, never assembled in bulk, and never for anyone who has asked not to be contacted.
 
 The test: **if this person read their record, would the relationship survive it?**
 
