@@ -22,6 +22,9 @@ carried honestly. The marker covers the whole line, and a missing or empty
 draft file is never acknowledgeable.
 
 Usage:  handoff-verify.py [HANDOFF]      (default: .remember/remember.md)
+        handoff-verify.py --where [--config FILE]
+                prints root, config, handoff, drafts and journal, one
+                "key: value" line each, resolved from the working directory
 Exit:   0 = clean, 1 = findings, 2 = cannot read the handoff
 Used by /pitstop:park (after writing the handoff) and /pitstop:sitrep (before
 repeating it).
@@ -36,6 +39,33 @@ PATH = re.compile(r"^(~?/?[\w.@+-]+(?:/[\w.@+-]+)+\.[A-Za-z][A-Za-z0-9]{0,7})(?:
 SHA = re.compile(r"^[0-9a-f]{7,40}$")
 DRAFT = re.compile(r"\b(drafted|unposted|unsent|not (?:yet )?(?:posted|sent)|awaiting\b.{0,20}\bapproval)\b", re.I)
 ACK = "(unverified)"
+DEFAULT_HANDOFF = ".remember/remember.md"
+
+
+def read_header(path):
+    """The integrations file's header as a dict. {} if the file is absent; None if it does not parse."""
+    try:
+        with open(path, newline="") as fh:
+            text = fh.read()
+    except FileNotFoundError:
+        return {}
+    except OSError:
+        return None
+    # newline="" keeps any \r; every comparison below strips it, so CRLF files parse too.
+    lines = text.split("\n")
+    if lines[0].strip() != "---":
+        return None
+    header = {}
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return header
+        if not line.strip():
+            continue
+        key, sep, value = line.partition(":")
+        if not sep or not key.strip():
+            return None
+        header[key.strip()] = value.strip()
+    return None
 
 
 def git(root, *args):
@@ -73,8 +103,37 @@ def line_count(found, rel, root):
     return len(r.stdout.splitlines()) if r.returncode == 0 else None
 
 
+def where(cwd, config):
+    """The five locations every pitstop skill uses, as (key, value) pairs in fixed order."""
+    rc, top = git(cwd, "rev-parse", "--show-toplevel")
+    root = top if rc == 0 else os.path.abspath(cwd)
+    header = read_header(config) if config else {}
+    if header is None:
+        shown, header = f"invalid {config}", {}
+    elif not config or not os.path.exists(config):
+        shown = "none"
+    else:
+        shown = config
+    handoff = os.path.normpath(os.path.join(root, header.get("handoff_path") or DEFAULT_HANDOFF))
+    hdir = os.path.dirname(handoff)
+    return [("root", root), ("config", shown), ("handoff", handoff),
+            ("drafts", os.path.join(hdir, "drafts")), ("journal", os.path.join(hdir, "journal.md"))]
+
+
 def main(argv):
-    handoff = os.path.abspath(argv[1] if len(argv) > 1 else ".remember/remember.md")
+    args = argv[1:]
+    if args[:1] == ["--where"]:
+        if len(args) == 1:
+            config = None
+        elif len(args) == 3 and args[1] == "--config":
+            config = args[2]
+        else:
+            print("usage: handoff-verify.py --where [--config FILE]", file=sys.stderr)
+            return 2
+        for key, value in where(os.getcwd(), config):
+            print(f"{key}: {value}")
+        return 0
+    handoff = os.path.abspath(args[0] if args else DEFAULT_HANDOFF)
     try:
         with open(handoff) as fh:
             lines = fh.read().splitlines()

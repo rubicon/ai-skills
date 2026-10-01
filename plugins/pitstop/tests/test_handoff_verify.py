@@ -17,6 +17,13 @@ DEFECT_PATH_LINE = ("   `tests/cache-warmup.test.mjs:77` still needs the guard "
 REAL_PATH = "tests/report-builder.test.mjs"
 
 
+def run_where(cwd, *extra):
+    r = subprocess.run([sys.executable, SCRIPT, "--where", *extra],
+                       capture_output=True, text=True, cwd=cwd)
+    pairs = [l.split(": ", 1) for l in r.stdout.splitlines() if ": " in l]
+    return r.returncode, pairs, r.stderr
+
+
 class Repo:
     def __init__(self, git=True):
         self.tmp = tempfile.TemporaryDirectory()
@@ -207,7 +214,79 @@ class HandoffVerify(unittest.TestCase):
         self.assertIn("cannot read", r.stderr)
 
 
+class Where(unittest.TestCase):
+    def setUp(self):
+        self.repo = Repo()
+        self.addCleanup(self.repo.tmp.cleanup)
+        os.makedirs(os.path.join(self.repo.root, "src", "deep"))
+        self.cfg = os.path.join(self.repo.root, "cfg", "integrations.md")
+
+    def write_cfg(self, text, newline="\n"):
+        os.makedirs(os.path.dirname(self.cfg), exist_ok=True)
+        with open(self.cfg, "w", newline=newline) as fh:
+            fh.write(text)
+
+    def test_defaults_from_a_subdirectory_resolve_to_the_repo_root(self):
+        rc, pairs, err = run_where(os.path.join(self.repo.root, "src", "deep"))
+        self.assertEqual(rc, 0, err)
+        root = self.repo.root
+        self.assertEqual(pairs, [
+            ["root", root], ["config", "none"],
+            ["handoff", os.path.join(root, ".remember", "remember.md")],
+            ["drafts", os.path.join(root, ".remember", "drafts")],
+            ["journal", os.path.join(root, ".remember", "journal.md")],
+        ])
+
+    def test_missing_config_file_is_none(self):
+        rc, pairs, err = run_where(self.repo.root, "--config", self.cfg)
+        self.assertEqual(dict(pairs)["config"], "none")
+
+    def test_handoff_path_comes_from_the_header(self):
+        self.write_cfg("---\nhandoff_path: notes/handoff.md\n---\n## Handoff\nmode: default\n")
+        rc, pairs, err = run_where(self.repo.root, "--config", self.cfg)
+        d = dict(pairs)
+        self.assertEqual(d["config"], self.cfg)
+        self.assertEqual(d["handoff"], os.path.join(self.repo.root, "notes", "handoff.md"))
+        self.assertEqual(d["drafts"], os.path.join(self.repo.root, "notes", "drafts"))
+        self.assertEqual(d["journal"], os.path.join(self.repo.root, "notes", "journal.md"))
+
+    def test_crlf_header_parses(self):
+        self.write_cfg("---\nhandoff_path: notes/handoff.md\n---\n", newline="\r\n")
+        rc, pairs, err = run_where(self.repo.root, "--config", self.cfg)
+        self.assertEqual(dict(pairs)["handoff"], os.path.join(self.repo.root, "notes", "handoff.md"))
+
+    def test_header_without_closing_fence_is_invalid_and_uses_defaults(self):
+        self.write_cfg("---\nhandoff_path: notes/handoff.md\n## Handoff\n")
+        rc, pairs, err = run_where(self.repo.root, "--config", self.cfg)
+        d = dict(pairs)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(d["config"], "invalid " + self.cfg)
+        self.assertEqual(d["handoff"], os.path.join(self.repo.root, ".remember", "remember.md"))
+
+    def test_bad_arguments_exit_2(self):
+        r = subprocess.run([sys.executable, SCRIPT, "--where", "--bogus"],
+                           capture_output=True, text=True, cwd=self.repo.root)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("usage", r.stderr)
+
+    def test_project_path_with_a_space(self):
+        spaced = os.path.join(self.repo.tmp.name, "my project")
+        os.makedirs(spaced)
+        subprocess.run(GIT + ["init", "-q"], cwd=spaced, check=True)
+        rc, pairs, err = run_where(spaced)
+        d = dict(pairs)
+        self.assertEqual(d["root"], os.path.realpath(spaced))
+        self.assertEqual(d["handoff"], os.path.join(os.path.realpath(spaced), ".remember", "remember.md"))
+
+
 class NonGitProject(unittest.TestCase):
+    def test_where_uses_the_working_directory_outside_git(self):
+        repo = Repo(git=False)
+        self.addCleanup(repo.tmp.cleanup)
+        rc, pairs, err = run_where(repo.root)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(dict(pairs)["root"], repo.root)
+
     def test_paths_checked_and_shas_skipped_outside_git(self):
         repo = Repo(git=False)
         self.addCleanup(repo.tmp.cleanup)
