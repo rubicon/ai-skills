@@ -157,6 +157,63 @@ class HandoffVerify(unittest.TestCase):
         self.assertEqual(rc, 1, out + err)
         self.assertIn("LINE-OUT-OF-RANGE", out)
 
+    def test_a_draft_on_disk_that_the_handoff_does_not_name_fails(self):
+        self.repo.write(".remember/drafts/old.md", "text\n")
+        rc, out, err = self.repo.verify("Drafts: none unsent. (unverified)\n")
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("UNLISTED-DRAFT line 0: .remember/drafts/old.md", out)
+        self.assertNotIn("ACKNOWLEDGED", out)
+
+    def test_hidden_files_and_the_done_folder_are_not_unlisted_drafts(self):
+        self.repo.write(".remember/drafts/.DS_Store", "x")
+        self.repo.write(".remember/drafts/done/sent.md", "text\n")
+        rc, out, err = self.repo.verify("Drafts: none unsent.\n")
+        self.assertEqual(rc, 0, out + err)
+        self.assertIn("drafts on disk: 0", out)
+
+    def test_a_draft_named_by_absolute_path_counts(self):
+        self.repo.write(".remember/drafts/a.md", "text\n")
+        full = os.path.join(self.repo.root, ".remember", "drafts", "a.md")
+        rc, out, err = self.repo.verify(f"Reply unposted: `{full}`\n")
+        self.assertEqual(rc, 0, out + err)
+
+    def test_a_draft_claim_pointing_into_done_fails(self):
+        self.repo.write(".remember/drafts/done/a.md", "text\n")
+        rc, out, err = self.repo.verify("Reply unposted: `.remember/drafts/done/a.md`\n")
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("DONE-DRAFT-CLAIMED line 1", out)
+
+    def test_a_done_file_on_the_next_line_does_not_spoil_a_live_claim(self):
+        self.repo.write(".remember/drafts/a.md", "text\n")
+        self.repo.write(".remember/drafts/done/b.md", "text\n")
+        rc, out, err = self.repo.verify(
+            "Reply unposted: `.remember/drafts/a.md`\n"
+            "Sent earlier: `.remember/drafts/done/b.md`\n")
+        self.assertEqual(rc, 0, out + err)
+
+    def test_saying_there_are_no_unsent_drafts_is_not_a_draft_claim(self):
+        for text in ("Drafts: none unsent.\n", "There are no unposted replies.\n"):
+            rc, out, err = self.repo.verify(text)
+            self.assertEqual(rc, 0, text + out + err)
+        rc, out, err = self.repo.verify("Reply unposted. None of the drafts are saved yet.\n")
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("DRAFT-WITHOUT-FILE", out)
+
+    def test_output_ends_with_age_drafts_and_summary(self):
+        rc, out, err = self.repo.verify("Nothing to report.\n")
+        tail = out.splitlines()[-3:]
+        self.assertEqual(tail[0], "handoff age: 0 min")
+        self.assertTrue(tail[1].startswith("drafts on disk: 0"), tail[1])
+        self.assertTrue(tail[2].startswith("handoff-verify: "), tail[2])
+
+    def test_handoff_age_is_reported_in_minutes(self):
+        path = os.path.join(self.repo.root, ".remember", "remember.md")
+        self.repo.write(".remember/remember.md", "Nothing to report.\n")
+        old = os.path.getmtime(path) - 3600
+        os.utime(path, (old, old))
+        r = subprocess.run([sys.executable, SCRIPT, path], capture_output=True, text=True)
+        self.assertIn("handoff age: 60 min", r.stdout)
+
     def test_path_only_in_ref_history_is_found(self):
         self.repo.git("checkout", "-q", "-b", "feature")
         self.repo.commit("src/only-on-branch.ts", "x\n")

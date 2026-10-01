@@ -14,7 +14,11 @@ Checks, over backticked tokens in the handoff:
             awaiting approval must name a file inside <handoff dir>/drafts/ on
             that line or the two after it. That file must be on disk there now
             and non-empty; a copy elsewhere or in git history does not count.
-            The bare word "draft" is not a trigger, so draft PRs pass.
+            The bare word "draft" is not a trigger, so draft PRs pass, and
+            "none unsent" or "no unposted ..." reports an absence, not a claim.
+  unlisted  every file directly in <handoff dir>/drafts/ (not hidden, not in
+            done/) must be named in the handoff. Reported as line 0.
+  done      a draft claim must not name a file in drafts/done/.
 
 A failing path or SHA on a line containing "(unverified)" is reported as
 ACKNOWLEDGED and does not fail: that is how an identifier from another repo is
@@ -29,7 +33,7 @@ Exit:   0 = clean, 1 = findings, 2 = cannot read the handoff
 Used by /pitstop:park (after writing the handoff) and /pitstop:sitrep (before
 repeating it).
 """
-import os, re, subprocess, sys
+import os, re, subprocess, sys, time
 
 TOKEN = re.compile(r"`([^`\n]+)`")
 # ponytail: a path must contain "/" and end in an extension with a letter.
@@ -38,6 +42,8 @@ TOKEN = re.compile(r"`([^`\n]+)`")
 PATH = re.compile(r"^(~?/?[\w.@+-]+(?:/[\w.@+-]+)+\.[A-Za-z][A-Za-z0-9]{0,7})(?::(\d+)(?:-(\d+))?)?$")
 SHA = re.compile(r"^[0-9a-f]{7,40}$")
 DRAFT = re.compile(r"\b(drafted|unposted|unsent|not (?:yet )?(?:posted|sent)|awaiting\b.{0,20}\bapproval)\b", re.I)
+# "none unsent" or "no unposted replies" reports an absence; it is not a claim that a draft exists.
+NO_DRAFTS = re.compile(r"\b(?:none|no)\s+(?:\w+\s+)?(?:drafted|unposted|unsent)\b", re.I)
 ACK = "(unverified)"
 DEFAULT_HANDOFF = ".remember/remember.md"
 
@@ -153,6 +159,8 @@ def main(argv):
 
     findings, acknowledged, checked = [], [], 0
     drafts_real = os.path.realpath(drafts_dir) + os.sep
+    done_real = os.path.realpath(os.path.join(drafts_dir, "done")) + os.sep
+    named_drafts = set()
 
     def draft_file(rel):
         """The on-disk location if rel names a file inside the handoff's drafts dir, else None."""
@@ -174,6 +182,7 @@ def main(argv):
                 rel, start, end = m.group(1), m.group(2), m.group(3)
                 draft = draft_file(rel)
                 if draft:
+                    named_drafts.add(draft)
                     # A draft must be on disk now, in the drafts dir. Another worktree or a
                     # ref's history does not count, and neither finding is acknowledgeable:
                     # a named draft that is not there is lost text.
@@ -198,22 +207,39 @@ def main(argv):
                     if not found:
                         report(n, "MISSING-SHA", f"{tok} is not a commit in this repo")
 
-        if DRAFT.search(line):
+        claim = None if NO_DRAFTS.search(line) else DRAFT.search(line)
+        if claim:
             checked += 1
-            window = " ".join(lines[n:n + 3])
-            named = [m.group(1) for m in map(PATH.match, TOKEN.findall(window)) if m]
-            # A named draft that is missing or empty is reported by the path check above.
-            if not any(draft_file(p) for p in named):
-                findings.append(f"DRAFT-WITHOUT-FILE line {n + 1}: says \"{DRAFT.search(line).group(0)}\" "
-                                f"but names no file under {os.path.relpath(drafts_dir, root)}/")
 
-    on_disk = sorted(f for f in os.listdir(drafts_dir) if not f.startswith(".")) \
+            def drafts_named(text):
+                return [d for d in (draft_file(m.group(1))
+                                    for m in map(PATH.match, TOKEN.findall(text)) if m) if d]
+
+            # Prefer the claim's own line, so a done/ file mentioned on the next line
+            # does not count against a live claim.
+            named = drafts_named(line) or drafts_named(" ".join(lines[n:n + 3]))
+            said = claim.group(0)
+            if not named:
+                findings.append(f"DRAFT-WITHOUT-FILE line {n + 1}: says \"{said}\" "
+                                f"but names no file under {os.path.relpath(drafts_dir, root)}/")
+            elif any(d.startswith(done_real) for d in named):
+                findings.append(f"DONE-DRAFT-CLAIMED line {n + 1}: says \"{said}\" "
+                                f"but names a file in {os.path.relpath(drafts_dir, root)}/done/")
+
+    on_disk = sorted(f for f in os.listdir(drafts_dir)
+                     if not f.startswith(".") and os.path.isfile(os.path.join(drafts_dir, f))) \
         if os.path.isdir(drafts_dir) else []
+    for f in on_disk:
+        full = os.path.join(drafts_dir, f)
+        if os.path.realpath(full) not in named_drafts:
+            # Never acknowledgeable: an unnamed draft is text the next session will not see.
+            findings.append(f"UNLISTED-DRAFT line 0: {os.path.relpath(full, root)}")
 
     for msg in findings + acknowledged:
         print(msg)
     if not is_git:
         print("note: not a git repo, SHAs and ref history were not checked")
+    print(f"handoff age: {int((time.time() - os.path.getmtime(handoff)) // 60)} min")
     print(f"drafts on disk: {len(on_disk)}" + (" (" + ", ".join(on_disk[:10]) + ")" if on_disk else ""))
     print(f"handoff-verify: {checked} checked, {len(findings)} failed, {len(acknowledged)} acknowledged")
     return 1 if findings else 0
