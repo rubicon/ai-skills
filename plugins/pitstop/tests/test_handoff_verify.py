@@ -18,10 +18,10 @@ REAL_PATH = "tests/report-builder.test.mjs"
 
 
 def run_where(cwd, *extra):
-    r = subprocess.run([sys.executable, SCRIPT, "--where", *extra],
-                       capture_output=True, text=True, cwd=cwd)
-    pairs = [l.split(": ", 1) for l in r.stdout.splitlines() if ": " in l]
-    return r.returncode, pairs, r.stderr
+    # Bytes, split on "\n" only: text mode would turn a stray "\r" into a line break and hide it.
+    r = subprocess.run([sys.executable, SCRIPT, "--where", *extra], capture_output=True, cwd=cwd)
+    pairs = [l.split(": ", 1) for l in r.stdout.decode().split("\n") if ": " in l]
+    return r.returncode, pairs, r.stderr.decode()
 
 
 class Repo:
