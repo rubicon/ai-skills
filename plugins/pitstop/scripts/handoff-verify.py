@@ -44,19 +44,33 @@ def git(root, *args):
 
 
 def find_path(rel, root, worktrees, is_git):
-    """Return the on-disk location, "history" if only a ref has it, or None."""
+    """Return ("file", full path), ("history", commit that contains it), or None."""
     if rel.startswith(("~", "/")):
         full = os.path.expanduser(rel)
-        return full if os.path.exists(full) else None
+        return ("file", full) if os.path.exists(full) else None
     for base in [root] + worktrees:
         full = os.path.join(base, rel)
         if os.path.exists(full):
-            return full
+            return ("file", full)
     if is_git:
-        rc, out = git(root, "rev-list", "--all", "-1", "--", rel)
+        # The newest commit that added, modified, or renamed-in the path still contains it,
+        # unlike a plain rev-list, which can return the commit that deleted it.
+        rc, out = git(root, "log", "--all", "-1", "--format=%H", "--diff-filter=AMR", "--", rel)
         if rc == 0 and out:
-            return "history"
+            return ("history", out)
     return None
+
+
+def line_count(found, rel, root):
+    """Lines in the file on disk, or in the blob at the commit that holds it. None if unknowable."""
+    kind, value = found
+    if kind == "file":
+        if not os.path.isfile(value):
+            return None
+        with open(value, "rb") as fh:
+            return len(fh.read().splitlines())
+    r = subprocess.run(["git", "-C", root, "show", f"{value}:{rel}"], capture_output=True)
+    return len(r.stdout.splitlines()) if r.returncode == 0 else None
 
 
 def main(argv):
@@ -109,14 +123,13 @@ def main(argv):
                     elif os.path.getsize(draft) == 0:
                         findings.append(f"EMPTY-DRAFT line {n + 1}: {rel}")
                     continue
-                where = find_path(rel, root, worktrees, is_git)
-                if where is None:
+                found = find_path(rel, root, worktrees, is_git)
+                if found is None:
                     report(n, "MISSING-PATH", rel)
-                elif start and where != "history" and os.path.isfile(where):
-                    with open(where, errors="replace") as fh:
-                        count = sum(1 for _ in fh)
+                elif start:
+                    count = line_count(found, rel, root)
                     first, last = int(start), int(end or start)
-                    if not 1 <= first <= last <= count:
+                    if count is not None and not 1 <= first <= last <= count:
                         anchor = start + (f"-{end}" if end else "")
                         report(n, "LINE-OUT-OF-RANGE", f"{rel}:{anchor} (file has {count} lines)")
             elif SHA.match(tok) and is_git:

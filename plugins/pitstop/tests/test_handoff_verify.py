@@ -130,6 +130,26 @@ class HandoffVerify(unittest.TestCase):
             rc, out, err = self.repo.verify(f"See `{REAL_PATH}:{anchor}`.\n")
             self.assertEqual(rc, 0, f"{anchor}: {out}{err}")
 
+    def test_line_range_on_a_path_only_in_history_is_checked(self):
+        self.repo.git("checkout", "-q", "-b", "side")
+        self.repo.commit("src/gone.ts", "one\ntwo\n")
+        self.repo.git("checkout", "-q", "main")
+        rc, out, err = self.repo.verify("See `src/gone.ts:2`.\n")
+        self.assertEqual(rc, 0, out + err)
+        rc, out, err = self.repo.verify("See `src/gone.ts:3`.\n")
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("LINE-OUT-OF-RANGE", out)
+
+    def test_line_range_on_a_deleted_file_uses_the_last_version_that_had_it(self):
+        self.repo.commit("src/old.ts", "a\nb\nc\n")
+        self.repo.git("rm", "-q", "src/old.ts")
+        self.repo.git("commit", "-q", "-m", "drop")
+        rc, out, err = self.repo.verify("See `src/old.ts:3`.\n")
+        self.assertEqual(rc, 0, out + err)
+        rc, out, err = self.repo.verify("See `src/old.ts:4`.\n")
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("LINE-OUT-OF-RANGE", out)
+
     def test_path_only_in_ref_history_is_found(self):
         self.repo.git("checkout", "-q", "-b", "feature")
         self.repo.commit("src/only-on-branch.ts", "x\n")
