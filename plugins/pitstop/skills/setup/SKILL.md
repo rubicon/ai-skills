@@ -34,6 +34,7 @@ For each section show: what you detected (or "nothing"), the mode you recommend,
 - Modes. Handoff: `default` or `custom`. Journal: `default`, `skip`, or `custom`. Decision record and Status sources: `skip` or `custom`.
 - Recommend `default` for Handoff and Journal, and `skip` for the other two, unless a detected tool clearly does that job.
 - `uses` lists the exact tool or skill names, comma-separated, as this session shows them.
+- A `custom` Handoff may change what the handoff says or also send it somewhere else, but its instructions must still write the file at the `handoff:` path, because park verifies that file.
 - `instructions` may say only where and how to write that one record, or what to read for status. Never put posting, sending, committing, pushing, or deleting into them. If the user asks for that, explain that pitstop ignores such instructions at run time, and leave it out.
 
 ## 4. Write the file

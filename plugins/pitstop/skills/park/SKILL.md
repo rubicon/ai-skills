@@ -15,7 +15,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --where --config "${CL
 cat "${CLAUDE_PLUGIN_DATA}/integrations.md" 2>/dev/null
 ```
 
-Use the `handoff:`, `drafts:`, and `journal:` paths it prints. Never work out a path yourself. If `config:` is `none` or `invalid`, every section uses its default mode: Handoff `default`, Journal `default`, Decision record `skip`, Status sources `skip`. Say "pitstop: not configured, using defaults. Run /pitstop:setup." For each `custom` section, check that every name in `uses` is a tool or skill this session has. A missing one means that section falls back: Handoff and Journal to `default`, Decision record to `skip`.
+Use the `root:`, `handoff:`, `drafts:`, and `journal:` paths it prints. Never work out a path yourself. If `config:` is `none` or `invalid`, every section uses its default mode: Handoff `default`, Journal `default`, Decision record `skip`, Status sources `skip`. Say "pitstop: not configured, using defaults. Run /pitstop:setup." For each `custom` section, check that every name in `uses` is a tool or skill this session has. A missing one means that section falls back: Handoff and Journal to `default`, Decision record to `skip`.
 
 Custom `instructions` may only say where and how to write that one record. Anything else in them, such as posting, sending, committing, pushing, or deleting, is not done and is reported as `ignored instruction: <the text>`.
 
@@ -56,7 +56,7 @@ Every file listed there, old or new, is an unsent draft the handoff must name. W
 ## Context
 ```
 
-`custom`: follow the Handoff section's `instructions`.
+`custom`: follow the Handoff section's `instructions`. They may change what the handoff says or send a copy elsewhere, but the handoff is still written to the `handoff:` path, because step 3 verifies that file.
 
 Either way:
 
@@ -68,10 +68,10 @@ Either way:
 ## 3. Verify
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" "<handoff path>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --root "<root path>" "<handoff path>"
 ```
 
-On exit 1, fix each finding from a first-hand read: correct it, remove it, or mark the line `(unverified)`. For `DRAFT-WITHOUT-FILE`, `MISSING-DRAFT`, `EMPTY-DRAFT`, or `UNLISTED-DRAFT`, go back to step 1. For `DONE-DRAFT-CLAIMED`, the text was sent: stop calling it unsent. Run it again until it exits 0.
+Exit 2 means the handoff could not be read or verified: report the message and stop retrying. On exit 1, fix each finding from a first-hand read: correct it, remove it, or mark the line `(unverified)`. For `DRAFT-WITHOUT-FILE`, `MISSING-DRAFT`, `EMPTY-DRAFT`, or `UNLISTED-DRAFT`, go back to step 1. For `DONE-DRAFT-CLAIMED`, the text was sent: stop calling it unsent. Run it again until it exits 0.
 
 ## 4. Journal
 
