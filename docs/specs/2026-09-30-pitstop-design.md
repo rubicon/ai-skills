@@ -26,8 +26,10 @@ tests; the integrations file.
 spike confirms that a hook exiting 2 visibly blocks a manual `/compact` in the desktop app. If the
 spike fails, the plugin stays hook-free.
 
-**Not in either release:** per-project configuration, blocking `/clear` (no hook can), blocking
-automatic compaction, recovering drafts from session transcripts.
+**Not in 0.1.0:** per-project configuration. It may be reconsidered for a later release.
+
+**Not in either release:** blocking `/clear` (no hook can), blocking automatic compaction,
+recovering drafts from session transcripts.
 
 ## 3. Layout
 
@@ -62,9 +64,10 @@ Every location comes from the verifier, never from a skill's own reasoning:
 handoff-verify.py --where
 ```
 
-prints the project root (`git rev-parse --show-toplevel` from the working directory, else the
-working directory), the integrations file in use or "none", the absolute handoff path, the drafts
-directory, and the default journal path. `park` and `sitrep` run it first and use what it prints.
+prints one `key: value` line per item, in this order: `root` (`git rev-parse --show-toplevel`
+from the working directory, else the working directory), `config` (the integrations file in use,
+or `none`), `handoff` (absolute), `drafts` (absolute), `journal` (absolute default path). `park` and
+`sitrep` run it first and use what it prints, and so does the 0.2.0 hook.
 
 ## 5. The integrations file
 
@@ -91,8 +94,14 @@ mode: skip
 mode: skip
 ```
 
-- The header is read by the script: plain `key: value` lines, parsed without a YAML library.
-  `handoff_path` is relative to the project root.
+- Grammar. The file is a `---` fenced header of `key: value` lines, then sections introduced by
+  the four `## ` headings above, in any order. Inside a section, `mode:` and `uses:` are single
+  lines, and `instructions:` is either a single line or `|` followed by indented lines until the
+  next unindented line. `uses` is a comma-separated list of tool or skill names. Unknown keys and
+  unknown headings are ignored. A missing `mode` means `default` where that is allowed, else
+  `skip`. The header is parsed by the script without a YAML library; the sections are read by the
+  model. `handoff_path` is relative to the project root. `guard_minutes` is a 0.2.0 header key,
+  defined in section 9.
 - Modes. Handoff: `default` or `custom`; it cannot be skipped. Journal: `default`, `skip`, or
   `custom`. Decision record and Status sources: `skip` or `custom`.
 - `uses` lists the tool or skill names a custom section needs. At the start of every `park` and
@@ -131,8 +140,12 @@ The order puts what cannot be rebuilt first.
    body, or copy awaiting approval), write one file in the drafts directory, named
    `<YYYY-MM-DD>-<slug>.md`, with a header (`Target`, `Status: unsent`, `Approved: yes | no`,
    `Hold: <condition> | none`) and then the text exactly as last shown to the user. Copy, never
-   rewrite. If only part survives, save it and add `Fidelity: partial`. Move any draft this session
-   sent or dropped into `drafts/done/`. If nothing is unsent, record "Drafts: none unsent."
+   rewrite. If only part survives, save it and add `Fidelity: partial`. The slug is the target's
+   identifying part in lower-case kebab form, at most 40 characters; a name that already exists
+   gets a `-2`, `-3` suffix. The drafts directory is created when first needed. Move any draft
+   this session sent or dropped into `drafts/done/`, creating it when needed. Then list the drafts
+   directory: the files there, old and new, are the unsent drafts the handoff must name. Record
+   "Drafts: none unsent." only when the directory holds no files and nothing in context is unsent.
 2. **Handoff.** Default: write `# Handoff` with `## State`, `## Next`, `## Context`. Custom: follow
    the section's instructions. In both cases: Next names every draft file; every path, line anchor,
    commit, ID, and URL is copied exactly from where it appears in the session or is left out; a path
@@ -143,8 +156,9 @@ The order puts what cannot be rebuilt first.
 4. **Journal.** Invoke `checkpoint`, unless the mode is `skip`.
 5. **Decision record.** Only when the mode is `custom` and the session made, reversed, or disproved
    an architectural decision.
-6. **Reply** with exactly: the draft paths or "none unsent"; the verifier's summary line; one line
-   each for handoff, journal, and decision record, reading ran, skipped, or unavailable; and which
+6. **Reply** with exactly: the draft paths or "Drafts: none unsent."; the verifier's summary line;
+   one line each for handoff, journal, and decision record in the form `<section>: ran`,
+   `<section>: skipped (<mode>)`, or `<section>: unavailable (<tool>), used default`; and which
    to type next. `/clear` then `/pitstop:sitrep` is the default at a task boundary. `/compact` is for
    mid-task state a handoff cannot carry.
 
@@ -175,7 +189,8 @@ journal path. It can be run on its own as `/pitstop:checkpoint`.
    wrong because the current branch lacks it. A draft named without a file goes under "Needs you".
 3. Report in about 40 lines: Needs you, including every file in the drafts directory with its
    `Target`; Done since the last handoff, each item tagged verified or reported; Outstanding, as a
-   table with High, Medium, or Low and a `[BLOCKING: <what>]` marker; Health; Do first.
+   table with High, Medium, or Low and a `[BLOCKING: <what>]` marker; Health, which ends with one
+   line per configured status source reading ran, skipped, or unavailable; Do first.
 
 `sitrep` is read-only.
 
@@ -187,12 +202,12 @@ What it checks, stated exactly, because it is narrower than "every identifier":
 
 | Check | Rule | Finding |
 |---|---|---|
-| Path | A backticked token that contains a slash and ends in an extension must exist in the project, a git worktree, or the history of any ref | `MISSING-PATH` |
-| Line anchor | `path:N` or `path:FROM-TO` must satisfy 1 <= FROM <= TO <= line count. For a path found only in history, the count comes from the blob in the ref that proved it exists | `LINE-OUT-OF-RANGE` |
+| Path | A backticked token that contains a slash and ends in a dot, a letter, and up to seven more letters or digits (so `a/b.ts`, `a/b.test.mjs`, and `~/x/y.md` qualify; `a/.env`, `a/Dockerfile`, and `v1.2.3` do not) must exist in the project, a git worktree, or the history of any ref. History means `git rev-list --all -1 -- <path>` names a commit | `MISSING-PATH` |
+| Line anchor | A Path token may end in `:N` or `:FROM-TO`, inside the same backticks. It must satisfy 1 <= FROM <= TO <= line count. For a path found only in history, the count comes from the blob at the commit that proved it exists | `LINE-OUT-OF-RANGE` |
 | Commit | A backticked 7 to 40 character hex token containing a letter must be a commit in this repository | `MISSING-SHA` |
 | Draft claim | A line saying drafted, unposted, unsent, not posted, not sent, or awaiting approval must name, on that line or the next two, a file inside the drafts directory | `DRAFT-WITHOUT-FILE` |
 | Draft file | A named draft must be a non-empty file on disk in the drafts directory now. A copy elsewhere, in another worktree, or in history does not count | `MISSING-DRAFT`, `EMPTY-DRAFT` |
-| Unlisted draft | Every file directly in the drafts directory must be named in the handoff | `UNLISTED-DRAFT` |
+| Unlisted draft | Every file directly in the drafts directory must be named in the handoff: a backticked Path token that resolves to that file | `UNLISTED-DRAFT` |
 | Done draft | A draft claim must not point into `drafts/done/` | `DONE-DRAFT-CLAIMED` |
 
 Bare filenames, directories, branch names, and unbackticked paths are not checked. Widening the
@@ -203,8 +218,9 @@ A `MISSING-PATH`, `MISSING-SHA`, or `LINE-OUT-OF-RANGE` on a line containing `(u
 reported as `ACKNOWLEDGED` and does not fail. That is how an identifier from another repository is
 carried honestly. Draft findings are never acknowledgeable.
 
-The last line of output is a summary: how many identifiers were checked, failed, and acknowledged.
-The script also prints the handoff's age and the files in the drafts directory.
+Output, one finding per line as `<FINDING> line <n>: <detail>`, then `handoff age: <minutes> min`,
+then `drafts on disk: <count> (<names>)`, then the summary line
+`handoff-verify: <checked> checked, <failed> failed, <acknowledged> acknowledged`.
 
 ## 8. Draft lifecycle
 
@@ -218,11 +234,15 @@ every `sitrep` lists it.
 This is a reminder that catches "forgot to park". It is not a guarantee, and the README says so.
 
 - `park` gains a last step, `handoff-verify.py --stamp`, which re-verifies and, only on exit 0,
-  writes a stamp beside the handoff holding the time and the SHA-256 of the handoff file.
+  writes `.pitstop-parked` beside the handoff as JSON holding the time, the SHA-256 of the handoff
+  file, and the number of files directly in the drafts directory. The hook resolves every path
+  with the same resolver as `--where`.
 - A PreCompact hook with matcher `manual` allows the compaction when the stamp exists, its hash
-  matches the current handoff, and it is at most `guard_minutes` old (default 10, 0 disables).
-- Otherwise it blocks once and records the block in a file named by a hash of the session ID. A
-  second manual `/compact` in the same session within two minutes passes. The message says plainly
+  matches the current handoff, and it is at most `guard_minutes` old. `guard_minutes` is a header
+  key in the integrations file, default 10; 0 disables the guard.
+- Otherwise it blocks once and records the block in
+  `${CLAUDE_PLUGIN_DATA}/guard/<sha256 hex of the session ID>`. A second manual `/compact` in the
+  same session within two minutes passes, and the file is removed. The message says plainly
   that anything not saved to a file will be lost.
 - Automatic compaction is never touched. Any internal error lets the compaction through.
 - It cannot see text that exists only in the conversation. Work done after a park and inside the
@@ -235,10 +255,14 @@ This is a reminder that catches "forgot to park". It is not a guarantee, and the
   ref history, an uncommitted file in a second worktree, wording that must not trigger a draft claim
   (a "draft" pull request), a project that is not a git repository, and `--where`.
 - Each new check is confirmed non-vacuous once by removing the code it pins and seeing the test fail.
-- End to end, twice: a fresh agent in a scratch git project, holding an approved and unposted reply,
-  runs `park`. Once with no integrations file and once with a configured one. It passes when the
-  saved draft body is byte-identical to the original, the handoff names it, the verifier exits 0,
-  and the ran, skipped, or unavailable lines match the configuration.
+- End to end, three runs of `park` by a fresh agent in a scratch git project. The harness keeps
+  the original reply text in a file outside the project and gives the agent the text in its prompt.
+  Run one: no integrations file, one approved unposted reply. Run two: a configured file, same
+  reply. Run three: a configured file, a reply the session has already posted, plus a draft file
+  left by an earlier park. A run passes when `diff` between the saved draft body and the harness's
+  copy is empty, the handoff names every file directly in the drafts directory, the verifier exits
+  0, the ran, skipped, or unavailable lines match the configuration, and in run three the posted
+  reply's file is in `drafts/done/` and the older draft is still named.
 - `claude plugin validate plugins/pitstop`, `bash scripts/validate-skills.sh`, and
   `bash scripts/check-no-personal-data.sh`.
 
