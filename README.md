@@ -57,6 +57,7 @@ Install from this repository's marketplace (`rubicon`):
 | [salience](plugins/salience/README.md) | Executive presence system for LinkedIn — profile intelligence, positioning, voice, content, relationships, executive career search, and consulting development, behind one entry point and a verified-fact ledger |
 | [backup-before-troubleshooting](plugins/backup-before-troubleshooting/README.md) | Stand up a dated, self-documenting recovery workspace before changing system, app, or config state |
 | [session-messaging](plugins/session-messaging/README.md) | Cross-session messaging for Claude Code Desktop — how sessions message each other and report their own address |
+| [pitstop](plugins/pitstop/README.md) | Save what a compact or clear would destroy, then rebuild status after it, with a verified handoff |
 | [rubicon-marketing-board](https://github.com/rubicon/rubicon-marketing-board) | A nine-seat marketing advisory board for Claude Code (external source) |
 
 

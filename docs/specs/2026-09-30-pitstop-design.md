@@ -1,6 +1,6 @@
 # pitstop design
 
-- Status: draft for maintainer review. No plugin code exists yet.
+- Status: approved; 0.1.0 implemented on branch `dev/71-pitstop-plugin`.
 - Issue: https://github.com/rubicon/ai-skills/issues/71
 - Date: 2026-09-30
 
@@ -147,7 +147,8 @@ The order puts what cannot be rebuilt first.
    directory: the files there, old and new, are the unsent drafts the handoff must name. Record
    "Drafts: none unsent." only when the directory holds no files and nothing in context is unsent.
 2. **Handoff.** Default: write `# Handoff` with `## State`, `## Next`, `## Context`. Custom: follow
-   the section's instructions. In both cases: Next names every draft file; every path, line anchor,
+   the section's instructions, which may change the content or also send it elsewhere, but the
+   handoff is still written to the `handoff:` path, because step 3 verifies that file. In both cases: Next names every draft file; every path, line anchor,
    commit, ID, and URL is copied exactly from where it appears in the session or is left out; a path
    or commit not confirmed by a read or a command this session carries `(unverified)` on its line;
    no length limit overrides these rules.
@@ -196,13 +197,13 @@ journal path. It can be run on its own as `/pitstop:checkpoint`.
 
 ## 7. The verifier
 
-`handoff-verify.py [HANDOFF]` exits 0 when clean, 1 on findings, 2 when the handoff cannot be read.
+`handoff-verify.py [--root DIR] [HANDOFF]` exits 0 when clean, 1 on findings, and 2 when the handoff cannot be read or anything unexpected stops the check, so a crash is never read as findings. `--root` sets the project root when the project is not a git repository; `park` and `sitrep` pass the `root:` value `--where` printed. A draft path is recognized before the stricter path pattern, so a draft path containing spaces still counts. A draft-claim look-ahead stops at a line that is itself a claim, so one saved file cannot cover two drafts, and an absence such as "none unsent" is removed before a line is checked for a claim.
 
 What it checks, stated exactly, because it is narrower than "every identifier":
 
 | Check | Rule | Finding |
 |---|---|---|
-| Path | A backticked token that contains a slash and ends in a dot, a letter, and up to seven more letters or digits (so `a/b.ts`, `a/b.test.mjs`, and `~/x/y.md` qualify; `a/.env`, `a/Dockerfile`, and `v1.2.3` do not) must exist in the project, a git worktree, or the history of any ref. History means `git rev-list --all -1 -- <path>` names a commit | `MISSING-PATH` |
+| Path | A backticked token that contains a slash and ends in a dot, a letter, and up to seven more letters or digits (so `a/b.ts`, `a/b.test.mjs`, and `~/x/y.md` qualify; `a/.env`, `a/Dockerfile`, and `v1.2.3` do not) must exist in the project, a git worktree, or the history of any ref. History means `git log --all -1 --diff-filter=AMR -- <path>` names a commit, which is a commit that still contains the file | `MISSING-PATH` |
 | Line anchor | A Path token may end in `:N` or `:FROM-TO`, inside the same backticks. It must satisfy 1 <= FROM <= TO <= line count. For a path found only in history, the count comes from the blob at the commit that proved it exists | `LINE-OUT-OF-RANGE` |
 | Commit | A backticked 7 to 40 character hex token containing a letter must be a commit in this repository | `MISSING-SHA` |
 | Draft claim | A line saying drafted, unposted, unsent, not posted, not sent, or awaiting approval must name, on that line or the next two, a file inside the drafts directory | `DRAFT-WITHOUT-FILE` |
