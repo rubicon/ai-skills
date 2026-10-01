@@ -1,0 +1,9 @@
+{
+  "name": "pitstop",
+  "version": "0.1.0",
+  "description": "Save what a compact or clear would destroy, then rebuild status after it: unsent drafts to files, a mechanically verified handoff, a journal entry, and a status report checked against git.",
+  "author": { "name": "Dax Davis" },
+  "homepage": "https://github.com/rubicon/ai-skills",
+  "license": "MIT",
+  "keywords": ["handoff", "session", "compact", "clear", "status", "journal"]
+}
