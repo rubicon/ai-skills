@@ -44,6 +44,7 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `pitstop` plugin (v0.1.0): save what a compact or clear would destroy, then rebuild status after it. Four skills (`park`, `sitrep`, `checkpoint`, `setup`) and a tested verifier that fails a handoff naming a missing path, line, or commit, or a draft that was described but never saved
 - `relocate-session` skill (v1.0.0) — relocate a Claude Code session, or a whole project
   directory, without silently orphaning auto-memory: memory is keyed to the git repository
   root, a copy/move disposition asked on every run and defaulting to copy, a bundled

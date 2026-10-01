@@ -56,6 +56,11 @@
         "consulting",
         "cmo"
       ]
+    },
+    {
+      "name": "pitstop",
+      "source": "./plugins/pitstop",
+      "description": "Save what a compact or clear would destroy, then rebuild status after it, with a verified handoff."
     }
   ]
 }
