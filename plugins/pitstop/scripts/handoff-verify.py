@@ -25,11 +25,12 @@ ACKNOWLEDGED and does not fail: that is how an identifier from another repo is
 carried honestly. The marker covers the whole line, and a missing or empty
 draft file is never acknowledgeable.
 
-Usage:  handoff-verify.py [HANDOFF]      (default: .remember/remember.md)
+Usage:  handoff-verify.py [--root DIR] [HANDOFF]   (default: .remember/remember.md)
+                --root sets the project root outside git; pass the root: --where printed
         handoff-verify.py --where [--config FILE]
                 prints root, config, handoff, drafts and journal, one
                 "key: value" line each, resolved from the working directory
-Exit:   0 = clean, 1 = findings, 2 = cannot read the handoff
+Exit:   0 = clean, 1 = findings, 2 = cannot read the handoff or could not verify
 Used by /pitstop:park (after writing the handoff) and /pitstop:sitrep (before
 repeating it).
 """
@@ -43,6 +44,7 @@ PATH = re.compile(r"^(~?/?[\w.@+-]+(?:/[\w.@+-]+)+\.[A-Za-z][A-Za-z0-9]{0,7})(?:
 SHA = re.compile(r"^[0-9a-f]{7,40}$")
 DRAFT = re.compile(r"\b(drafted|unposted|unsent|not (?:yet )?(?:posted|sent)|awaiting\b.{0,20}\bapproval)\b", re.I)
 # "none unsent" or "no unposted replies" reports an absence; it is not a claim that a draft exists.
+ANCHOR = re.compile(r":\d+(?:-\d+)?$")
 NO_DRAFTS = re.compile(r"\b(?:none|no)\s+(?:\w+\s+)?(?:drafted|unposted|unsent)\b", re.I)
 ACK = "(unverified)"
 DEFAULT_HANDOFF = ".remember/remember.md"
@@ -51,7 +53,7 @@ DEFAULT_HANDOFF = ".remember/remember.md"
 def read_header(path):
     """The integrations file's header as a dict. {} if the file is absent; None if it does not parse."""
     try:
-        with open(path, newline="") as fh:
+        with open(path, newline="", errors="replace") as fh:
             text = fh.read()
     except FileNotFoundError:
         return {}
@@ -75,7 +77,10 @@ def read_header(path):
 
 
 def git(root, *args):
-    r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    try:
+        r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    except FileNotFoundError:
+        return 127, ""  # git is optional; without it every repo check is skipped
     return r.returncode, r.stdout.strip()
 
 
@@ -101,11 +106,15 @@ def line_count(found, rel, root):
     """Lines in the file on disk, or in the blob at the commit that holds it. None if unknowable."""
     kind, value = found
     if kind == "file":
-        if not os.path.isfile(value):
+        try:
+            with open(value, "rb") as fh:
+                return len(fh.read().splitlines())
+        except OSError:
             return None
-        with open(value, "rb") as fh:
-            return len(fh.read().splitlines())
-    r = subprocess.run(["git", "-C", root, "show", f"{value}:{rel}"], capture_output=True)
+    try:
+        r = subprocess.run(["git", "-C", root, "show", f"{value}:{rel}"], capture_output=True)
+    except FileNotFoundError:
+        return None
     return len(r.stdout.splitlines()) if r.returncode == 0 else None
 
 
@@ -139,9 +148,15 @@ def main(argv):
         for key, value in where(os.getcwd(), config):
             print(f"{key}: {value}")
         return 0
+    root_arg = None
+    if args[:1] == ["--root"]:
+        if len(args) < 2:
+            print("usage: handoff-verify.py [--root DIR] [HANDOFF]", file=sys.stderr)
+            return 2
+        root_arg, args = os.path.abspath(args[1]), args[2:]
     handoff = os.path.abspath(args[0] if args else DEFAULT_HANDOFF)
     try:
-        with open(handoff) as fh:
+        with open(handoff, errors="replace") as fh:
             lines = fh.read().splitlines()
     except OSError as exc:
         print(f"handoff-verify: cannot read {handoff}: {exc.strerror}", file=sys.stderr)
@@ -151,7 +166,9 @@ def main(argv):
     drafts_dir = os.path.join(hdir, "drafts")
     rc, top = git(hdir, "rev-parse", "--show-toplevel")
     is_git = rc == 0
-    root = top if is_git else os.path.dirname(hdir)
+    # Outside git the caller passes the root --where printed; the old guess assumed a
+    # handoff exactly one directory below the project root.
+    root = top if is_git else (root_arg or os.path.dirname(hdir))
     worktrees = []
     if is_git:
         _, out = git(root, "worktree", "list", "--porcelain")
@@ -168,6 +185,22 @@ def main(argv):
                                 else os.path.join(root, rel))
         return full if full.startswith(drafts_real) else None
 
+    def draft_ref(tok):
+        """The draft file a backticked token names, judged before the strict path pattern
+        so that spaces, parentheses, or a line anchor in a draft path still count."""
+        loose = ANCHOR.sub("", tok)
+        if "/" not in loose or "://" in loose:
+            return None, loose
+        return draft_file(loose), loose
+
+    def drafts_named(text):
+        return [d for d in (draft_ref(t)[0] for t in TOKEN.findall(text)) if d]
+
+    def is_claim(text):
+        # Remove "none unsent" style absences first, so they neither count as a claim
+        # nor hide a real claim later on the same line.
+        return DRAFT.search(NO_DRAFTS.sub("", text))
+
     def report(n, kind, detail):
         if ACK in lines[n]:
             acknowledged.append(f"ACKNOWLEDGED line {n + 1}: {kind} {detail}")
@@ -176,21 +209,22 @@ def main(argv):
 
     for n, line in enumerate(lines):
         for tok in TOKEN.findall(line):
+            draft, loose = draft_ref(tok)
+            if draft:
+                checked += 1
+                named_drafts.add(draft)
+                # A draft must be on disk now, in the drafts dir. Another worktree or a
+                # ref's history does not count, and neither finding is acknowledgeable:
+                # a named draft that is not there is lost text.
+                if not os.path.isfile(draft):
+                    findings.append(f"MISSING-DRAFT line {n + 1}: {loose}")
+                elif os.path.getsize(draft) == 0:
+                    findings.append(f"EMPTY-DRAFT line {n + 1}: {loose}")
+                continue
             m = PATH.match(tok)
             if m and "://" not in tok:
                 checked += 1
                 rel, start, end = m.group(1), m.group(2), m.group(3)
-                draft = draft_file(rel)
-                if draft:
-                    named_drafts.add(draft)
-                    # A draft must be on disk now, in the drafts dir. Another worktree or a
-                    # ref's history does not count, and neither finding is acknowledgeable:
-                    # a named draft that is not there is lost text.
-                    if not os.path.isfile(draft):
-                        findings.append(f"MISSING-DRAFT line {n + 1}: {rel}")
-                    elif os.path.getsize(draft) == 0:
-                        findings.append(f"EMPTY-DRAFT line {n + 1}: {rel}")
-                    continue
                 found = find_path(rel, root, worktrees, is_git)
                 if found is None:
                     report(n, "MISSING-PATH", rel)
@@ -207,17 +241,18 @@ def main(argv):
                     if not found:
                         report(n, "MISSING-SHA", f"{tok} is not a commit in this repo")
 
-        claim = None if NO_DRAFTS.search(line) else DRAFT.search(line)
+        claim = is_claim(line)
         if claim:
             checked += 1
-
-            def drafts_named(text):
-                return [d for d in (draft_file(m.group(1))
-                                    for m in map(PATH.match, TOKEN.findall(text)) if m) if d]
-
-            # Prefer the claim's own line, so a done/ file mentioned on the next line
-            # does not count against a live claim.
-            named = drafts_named(line) or drafts_named(" ".join(lines[n:n + 3]))
+            # Prefer the claim's own line, so a done/ file mentioned on the next line does not
+            # count against a live claim. Look ahead at most two lines, and stop at a line that
+            # is a claim of its own, so one saved file cannot cover two drafts.
+            window = [line]
+            for nxt in lines[n + 1:n + 3]:
+                if is_claim(nxt):
+                    break
+                window.append(nxt)
+            named = drafts_named(line) or drafts_named(" ".join(window))
             said = claim.group(0)
             if not named:
                 findings.append(f"DRAFT-WITHOUT-FILE line {n + 1}: says \"{said}\" "
@@ -245,5 +280,14 @@ def main(argv):
     return 1 if findings else 0
 
 
+def run(argv):
+    """Exit 2 on anything unexpected, so a crash is never mistaken for findings (exit 1)."""
+    try:
+        return main(argv)
+    except Exception as exc:  # noqa: BLE001 - every failure must surface as "could not verify"
+        print(f"handoff-verify: could not verify: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(run(sys.argv))

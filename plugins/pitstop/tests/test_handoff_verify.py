@@ -214,6 +214,49 @@ class HandoffVerify(unittest.TestCase):
         r = subprocess.run([sys.executable, SCRIPT, path], capture_output=True, text=True)
         self.assertIn("handoff age: 60 min", r.stdout)
 
+    def test_each_draft_claim_needs_its_own_file(self):
+        self.repo.write(".remember/drafts/issue-6.md", "text\n")
+        rc, out, err = self.repo.verify(
+            "- Reply to issue 5 is drafted and unposted.\n"
+            "- Reply to issue 6 is drafted and unposted: `.remember/drafts/issue-6.md`\n")
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("DRAFT-WITHOUT-FILE line 1", out)
+
+    def test_a_negation_does_not_cancel_a_real_claim_on_the_same_line(self):
+        rc, out, err = self.repo.verify(
+            "No drafted replies saved yet; the reply to issue 5 is unsent.\n")
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("DRAFT-WITHOUT-FILE", out)
+
+    def test_git_missing_from_path_is_not_a_crash(self):
+        py = os.path.realpath(sys.executable)
+        bindir = os.path.join(self.repo.tmp.name, "onlypython")
+        os.makedirs(bindir)
+        os.symlink(py, os.path.join(bindir, "python3"))
+        self.repo.write(".remember/remember.md", "See `" + REAL_PATH + "`.\n")
+        handoff = os.path.join(self.repo.root, ".remember", "remember.md")
+        r = subprocess.run([os.path.join(bindir, "python3"), SCRIPT, handoff],
+                           capture_output=True, text=True, env={"PATH": bindir})
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_unreadable_bytes_in_the_handoff_are_not_a_crash(self):
+        path = os.path.join(self.repo.root, ".remember", "remember.md")
+        with open(path, "wb") as fh:
+            fh.write(b"Caf\xe9 notes. See `" + REAL_PATH.encode() + b"`.\n")
+        r = subprocess.run([sys.executable, SCRIPT, path], capture_output=True, text=True)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_an_unexpected_error_exits_2_not_1(self):
+        drafts = os.path.join(self.repo.root, ".remember", "drafts")
+        os.makedirs(drafts)
+        os.chmod(drafts, 0)
+        self.addCleanup(os.chmod, drafts, 0o755)
+        rc, out, err = self.repo.verify("Nothing to report.\n")
+        self.assertNotIn("Traceback", err)
+        self.assertIn(rc, (0, 2), out + err)
+
     def test_path_only_in_ref_history_is_found(self):
         self.repo.git("checkout", "-q", "-b", "feature")
         self.repo.commit("src/only-on-branch.ts", "x\n")
@@ -334,6 +377,33 @@ class Where(unittest.TestCase):
         d = dict(pairs)
         self.assertEqual(d["root"], os.path.realpath(spaced))
         self.assertEqual(d["handoff"], os.path.join(os.path.realpath(spaced), ".remember", "remember.md"))
+
+
+class AwkwardPaths(unittest.TestCase):
+    def test_absolute_draft_path_with_a_space_counts(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        root = os.path.join(os.path.realpath(tmp.name), "my project")
+        os.makedirs(os.path.join(root, ".remember", "drafts"))
+        subprocess.run(GIT + ["init", "-q"], cwd=root, check=True)
+        draft = os.path.join(root, ".remember", "drafts", "2026-01-15-reply.md")
+        with open(draft, "w") as fh:
+            fh.write("text\n")
+        handoff = os.path.join(root, ".remember", "remember.md")
+        with open(handoff, "w") as fh:
+            fh.write(f"Reply unposted: `{draft}`\n")
+        r = subprocess.run([sys.executable, SCRIPT, handoff], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_root_flag_outside_git_with_a_nested_handoff(self):
+        repo = Repo(git=False); self.addCleanup(repo.tmp.cleanup)
+        repo.write("src/a.ts", "x\n")
+        repo.write("notes/session/drafts/r.md", "text\n")
+        repo.write("notes/session/handoff.md",
+                   "See `src/a.ts`. Reply unposted: `notes/session/drafts/r.md`\n")
+        handoff = os.path.join(repo.root, "notes", "session", "handoff.md")
+        r = subprocess.run([sys.executable, SCRIPT, "--root", repo.root, handoff],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
 class NonGitProject(unittest.TestCase):
