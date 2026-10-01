@@ -3,7 +3,7 @@
 
 Run:  python3 plugins/pitstop/tests/test_handoff_verify.py
 """
-import os, subprocess, sys, tempfile, unittest
+import contextlib, importlib.util, io, os, subprocess, sys, tempfile, unittest
 
 SCRIPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "handoff-verify.py")
 GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com",
@@ -421,6 +421,37 @@ class NonGitProject(unittest.TestCase):
         rc, out, err = repo.verify("See `notes/plan.md` and `abcdef1`.\n")
         self.assertEqual(rc, 0, out + err)
         self.assertIn("not a git repo", out)
+
+    def test_guessed_root_outside_git_is_named_on_stderr(self):
+        repo = Repo(git=False)
+        self.addCleanup(repo.tmp.cleanup)
+        rc, out, err = repo.verify("Nothing to report.\n")
+        self.assertIn(f"note: no --root given, assuming project root {repo.root}", err)
+        handoff = os.path.join(repo.root, ".remember", "remember.md")
+        r = subprocess.run([sys.executable, SCRIPT, "--root", repo.root, handoff],
+                           capture_output=True, text=True)
+        self.assertNotIn("assuming project root", r.stderr)
+
+
+class HungGit(unittest.TestCase):
+    def test_a_git_call_that_hangs_exits_2_instead_of_blocking(self):
+        spec = importlib.util.spec_from_file_location("handoff_verify", SCRIPT)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.GIT_TIMEOUT = 1
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        fake = os.path.join(tmp.name, "git")
+        with open(fake, "w") as fh:
+            fh.write("#!/bin/sh\nsleep 10\n")
+        os.chmod(fake, 0o755)
+        old_path = os.environ["PATH"]
+        os.environ["PATH"] = tmp.name + os.pathsep + old_path
+        self.addCleanup(os.environ.__setitem__, "PATH", old_path)
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            rc = mod.run(["handoff-verify.py", "--where"])
+        self.assertEqual(rc, 2, err.getvalue())
+        self.assertIn("TimeoutExpired", err.getvalue())
 
 
 if __name__ == "__main__":

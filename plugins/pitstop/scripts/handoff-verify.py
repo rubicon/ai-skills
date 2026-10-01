@@ -48,6 +48,9 @@ ANCHOR = re.compile(r":\d+(?:-\d+)?$")
 NO_DRAFTS = re.compile(r"\b(?:none|no)\s+(?:\w+\s+)?(?:drafted|unposted|unsent)\b", re.I)
 ACK = "(unverified)"
 DEFAULT_HANDOFF = ".remember/remember.md"
+# A hung git (stale lock, slow network filesystem) must end as exit 2 through run(),
+# not block park or sitrep forever.
+GIT_TIMEOUT = 60
 
 
 def read_header(path):
@@ -78,7 +81,8 @@ def read_header(path):
 
 def git(root, *args):
     try:
-        r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+        r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
+                           timeout=GIT_TIMEOUT)
     except FileNotFoundError:
         return 127, ""  # git is optional; without it every repo check is skipped
     return r.returncode, r.stdout.strip()
@@ -112,7 +116,8 @@ def line_count(found, rel, root):
         except OSError:
             return None
     try:
-        r = subprocess.run(["git", "-C", root, "show", f"{value}:{rel}"], capture_output=True)
+        r = subprocess.run(["git", "-C", root, "show", f"{value}:{rel}"], capture_output=True,
+                           timeout=GIT_TIMEOUT)
     except FileNotFoundError:
         return None
     return len(r.stdout.splitlines()) if r.returncode == 0 else None
@@ -169,6 +174,8 @@ def main(argv):
     # Outside git the caller passes the root --where printed; the old guess assumed a
     # handoff exactly one directory below the project root.
     root = top if is_git else (root_arg or os.path.dirname(hdir))
+    if not is_git and not root_arg:
+        print(f"note: no --root given, assuming project root {root}", file=sys.stderr)
     worktrees = []
     if is_git:
         _, out = git(root, "worktree", "list", "--porcelain")
