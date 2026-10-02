@@ -5,6 +5,14 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [1.3.0](https://github.com/rubicon/ai-skills/compare/v1.2.0...v1.3.0) (2026-10-02)
+
+
+### Features
+
+* **pitstop:** add the pitstop plugin (park, sitrep, checkpoint, setup) ([#72](https://github.com/rubicon/ai-skills/issues/72)) ([5e22ff2](https://github.com/rubicon/ai-skills/commit/5e22ff24db83182cdcfb7e61c3f62dd1200a15ed)), closes [#71](https://github.com/rubicon/ai-skills/issues/71)
+* **salience:** give voice a situational axis and an expiring tell list ([#75](https://github.com/rubicon/ai-skills/issues/75)) ([60d38c5](https://github.com/rubicon/ai-skills/commit/60d38c5a4c286b8d242ba5546ad9f9ab25fa8bc1)), closes [#38](https://github.com/rubicon/ai-skills/issues/38) [#43](https://github.com/rubicon/ai-skills/issues/43) [#48](https://github.com/rubicon/ai-skills/issues/48) [#49](https://github.com/rubicon/ai-skills/issues/49) [#50](https://github.com/rubicon/ai-skills/issues/50) [#51](https://github.com/rubicon/ai-skills/issues/51) [#52](https://github.com/rubicon/ai-skills/issues/52) [#53](https://github.com/rubicon/ai-skills/issues/53) [#69](https://github.com/rubicon/ai-skills/issues/69) [#70](https://github.com/rubicon/ai-skills/issues/70)
+
 ## [1.2.0](https://github.com/rubicon/ai-skills/compare/v1.1.1...v1.2.0) (2026-09-09)
 
 
