@@ -7,6 +7,90 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-23
+
+### Added
+
+- `salience-voice` — **situational tone modulation.** The module captured one voice and enforced it
+  uniformly. It already varied by topic (confidence zones) and by destination (register), and
+  neither of those is the axis that causes damage: the same voice pitched for the wrong *moment*. A
+  profile is captured from a person at work — analytical, in command of the material, usually mildly
+  amused — which is right for most of what they will ever publish and badly wrong for a layoff, a
+  tribute, or a public correction. Five dimensions now flex (hedging, humor, distance, sentence
+  length, claim-to-acknowledgment ratio) and identity does not flex at all, because a voice that
+  swaps its whole register under pressure reads as a different person, which is worse than reading
+  as cold. Six situations are named with the specific failure each produces. **Not posting is a
+  valid output** and appears in the table as one. Where the samples hold no evidence of how the
+  person writes under weight, the inference is flagged as an inference rather than presented as
+  their voice, and substance still routes to `salience-positioning`.
+
+- `salience-voice` — **the voice record is now evidenced and tiered.** Salience tiered every career
+  fact and then stored voice as an untiered blob, so a profile built from forty posts and one built
+  from four interview answers were indistinguishable downstream. The record now carries
+  `verified` / `stated` / `provisional`, and a provisional profile says so when it drives a draft.
+  Anti-patterns carry counts with denominators (`absence_signals`), because "you have not used this
+  once in forty posts" is a fact about the user while "this reads as machine-written" is a rule
+  about writing in general, and the second is wrong often enough to do harm. An absence that was not
+  counted is not asserted.
+
+- `salience-voice` — **stated preference outranks sample evidence, and the conflict is spoken.**
+  Evidence describes what the voice is; a stated preference declares what it should be, and is a
+  boundary of the same kind as `boundaries.will_not_claim`. One stray hashtag from 2019 does not
+  overturn an instruction. Both are retained and the disagreement is surfaced, because silently
+  siding with the evidence argues with the user about their own intent and silently siding with the
+  preference enshrines whatever they happened to say that day.
+
+- `salience-voice` — **recorded speech as a first-class voice source**, ranked above published
+  writing for cadence and vocabulary and below it for register. It is unedited, it carries the words
+  a person reaches for under mild pressure, and a senior executive usually has far more of it in
+  public than they have writing. Replies, reshares, quote-posts, and comments on other people's work
+  are now excluded from extraction: they carry the other person's frame and drag the profile toward
+  whoever the user was answering.
+
+- `salience-voice` — **refinement is a loop with a floor and a paper trail.** At least five rounds,
+  three drafts each, and every draft names the profile lines that produced it. That makes the
+  profile auditable: a user who dislikes a sentence can see it came from `hedging: low` and fix the
+  rule instead of fixing the sentence and meeting the same problem next week.
+
+- `salience-voice` — **signature moves carry a budget.** The failure of every voice-matched
+  generator is to find the handful of things that make someone sound like themselves and then do all
+  of them in every paragraph. Five to twelve moves in the profile, at most two in a short post, never
+  the same move twice in one piece. For an executive publishing weekly the tic otherwise becomes the
+  brand.
+
+### Changed
+
+- `salience-voice` — **rhythm is now the primary AI-tell signal and vocabulary the secondary one.**
+  Sentence-length standard deviation under roughly four words across a hundred-sentence window
+  detects machine-flat prose better than any word list and does not punish a plain writer for having
+  a plain style. The two failure modes were asymmetric in the old order: a competent writer avoids
+  every listed word and still produces characterless paragraphs, while an executive with a spare
+  register trips the list constantly and is generating nothing. The lexical list is now read as a
+  rate — roughly one flagged term per 500 words — rather than as a hit.
+
+- `salience-voice` — **`references/ai-tells.md` now expires.** It carries a review date and a stated
+  half-life, rules for how an entry earns its place and how one leaves, and the acknowledgement that
+  every entry is a fact about a generation of models rather than a fact about English. Over-catching
+  is called out as the more damaging direction, since an entry that drifts back to ordinary usage
+  makes this module flatten the voice it exists to protect. The refresh signal is the user's own
+  overrides — three rejections of a flag demotes it for that user — recorded in `tell_overrides` in
+  the local voice record, never by editing the shipped file, which is byte-identical on every
+  machine that installs it.
+
+- `salience-voice` — **the tell list is never pointed at another person.** Cites Liang et al. (2023)
+  on GPT detectors misclassifying a majority of TOEFL essays by non-native speakers while scoring
+  native-speaker essays almost perfectly. These markers overlap heavily with careful, formally
+  learned English, so using them to allege someone else's writing was machine-generated produces a
+  confident accusation with a known demographic skew — and the accusation cannot be retracted. The
+  cluster principle was already present; this is the evidence for why it exists.
+
+- `salience-voice` version 0.1.0 → 0.2.0. `salience` entry-point routing updated for situational
+  tone.
+
+- `evals/test-cases.yaml` — seven cases (T37-T43) covering the layoff register, not-posting as a
+  recommendation, the preference/evidence conflict, uncounted absence, refusing to judge a third
+  party's authorship, local tell demotion, and signature-move rationing. 43 cases total.
+
 ## [0.4.0] - 2026-09-08
 
 ### Added

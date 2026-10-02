@@ -1,7 +1,50 @@
 # AI Tells
 
+**Last reviewed: 2026-09-23. Assume a half-life of about a year.** See *This list expires*, below,
+before trusting an entry — every one of them is a fact about a generation of models, not a fact
+about English.
+
 Three tiers. Tier assignment decides whether a pattern is removed unconditionally or only when the
 voice profile says the user does not do it.
+
+## Rhythm first, vocabulary second
+
+**Uniformity is the stronger signal, and the lists below are the weaker one.** Sentence length with
+a standard deviation under roughly four words across a hundred-sentence window detects machine-flat
+prose better than any vocabulary list, and unlike a word list it does not punish a writer for having
+a plain style.
+
+This matters because the two failure modes are asymmetric. A competent writer avoids every word
+below and still produces even, characterless paragraphs — the word list misses them entirely. An
+executive with a deliberately spare register trips the word list constantly and is not generating
+anything. Measuring the rhythm gets both right.
+
+Measure first:
+
+```
+# sentence-length standard deviation across the piece
+# sigma < 4 over ~100 sentences is a strong tell on its own
+```
+
+Then read the lexical list as a **rate, not a hit**: roughly one flagged term per 500 words is where
+frequency starts to mean something. A single occurrence of anything below means nothing at all.
+
+## These markers are biased against non-native English writers
+
+Liang et al. (2023), *GPT detectors are biased against non-native English writers*, found that GPT
+detectors misclassified a majority of TOEFL essays by non-native speakers as machine-generated while
+classifying native-speaker essays almost perfectly. The markers of "AI writing" overlap heavily with
+the markers of careful, formally-learned English: controlled vocabulary, even sentence length,
+conventional transitions, low idiom.
+
+Two rules follow, and the second is absolute:
+
+1. **Treat any single signal as suspicion, never proof.** This is the cluster principle below, and
+   the bias evidence is why it exists rather than a stylistic preference.
+2. **Never use this file to allege that someone else's writing was machine-generated.** Not a
+   colleague's draft, not a candidate's cover letter, not a competitor's post. The list exists to
+   improve the user's own copy. Pointed at another person it produces a confident accusation with a
+   known demographic skew, and the accusation is not retractable.
 
 ## Clusters, not isolated hits
 
@@ -206,6 +249,61 @@ tells were.
 **Do not narrate the pass on drafted copy.** For a *rewrite* of the user's existing text, the
 before/after diff is the product and should be shown. For copy Salience drafted itself, showing a
 "before humanizer / after humanizer" sequence is noise — deliver the clean version.
+
+## This list expires
+
+Every entry here is a fact about a particular generation of language models. "Delve" is on the list
+because of a quirk in one era of training data, not because of anything about the word. Models
+change, the tells change, and a list nobody revisits fails in both directions:
+
+- **Under-catching** is the obvious failure. New models produce patterns this file does not name, and
+  a list that never grows stops being a detector.
+- **Over-catching** is the damaging one. An entry drifts back toward ordinary usage and the list
+  keeps stripping it — which is this module flattening the voice it exists to protect. The cluster
+  principle guards against acting on one hit; it does nothing about an entry that should no longer
+  be here at all.
+
+There is a loop underneath both. As writers scrub flagged words to avoid seeming machine-written,
+the *absence* of those words becomes the signal, and the list starts measuring its own effect.
+
+### How an entry earns its place
+
+The same evidence discipline that governs career facts. A pattern reaches the forensic tier only
+when it is:
+
+- **Specific** — a named construction or word, never a category or a register
+- **Observed**, not theorized, in actual generated output
+- **Rare in genuine writing**, checked against real samples rather than assumed
+
+"Feels AI-generated" is not an entry. Neither is "corporate tone".
+
+### How an entry leaves
+
+Three ways, and only the first happens on its own:
+
+1. **The user overrides it repeatedly.** Three rejections of the same flag is the user telling you
+   the entry is wrong for them. Demote it for that user and stop raising it.
+2. **The review date passes and the pattern no longer holds.** Check the forensic tier against
+   recent writing the user considers good. Anything that fires on writing they like is not forensic,
+   whatever it used to be.
+3. **It was never evidenced.** An entry nobody can source to observed output comes off.
+
+### Local demotions live in the voice record, not here
+
+This file ships inside the plugin and is byte-identical on every machine that installs it. Per-user
+corrections belong in `${SALIENCE_HOME:-~/.claude/salience}/voice.yaml`:
+
+```yaml
+tell_overrides:
+  - pattern: "em-dash-driven rhythm"
+    action: allow
+    reason: "rejected the flag 4 times; 31 of 40 samples use them"
+    since: 2026-09-14
+```
+
+**Never edit the shipped file to record something about one user.** The override record is also the
+refresh signal: a pattern accumulating overrides across a user's history is the closest thing to
+real-time evidence available here, and it is worth more than this list's original reasoning.
 
 ## Detection scores
 

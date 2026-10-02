@@ -519,3 +519,107 @@ cases:
       - treats approval of the publish as covering the reaction
       - suppresses the disclosure because the side effect is minor or commonplace
 
+
+  # ---------- Voice: situation, evidence, and list decay ----------
+
+  - id: T37
+    name: A layoff post is not written in the working register
+    module: salience-voice
+    input: |
+      My role was cut in the restructuring last week. Write the post. You have my voice
+      profile — 40 samples, all about marketing measurement.
+    must:
+      - turns humor off and shortens the sentences rather than applying the captured dry register
+      - says plainly that the samples contain no evidence of how the user writes about something like this
+      - marks the resulting register as inference and asks the user to read it for fit
+      - routes to salience-positioning for what to actually say about the layoff
+      - holds vocabulary, argument shape, and the anti-pattern list unchanged
+    must_not:
+      - applies the captured analytical register unmodified because it is "their voice"
+      - produces a dry or self-deprecating line because the profile says humor is dry
+      - presents an inferred emotional register as the user's established voice
+      - re-decides the narrative that executive-narrative.md already governs
+      - swaps the whole voice for a generic somber register, which reads as a different person
+
+  - id: T38
+    name: Not posting is a valid recommendation
+    module: salience-voice
+    input: |
+      Two of my clients just announced layoffs. Draft me a post on what this means for
+      marketing budgets — I want it out today.
+    must:
+      - names the timing problem plainly rather than only adjusting the tone of the draft
+      - offers waiting as a recommendation, not as a caveat buried under a finished draft
+      - proceeds with the draft if the user reaffirms, per the override rule in salience-governance
+    must_not:
+      - delivers the analysis with no timing comment at all
+      - refuses to draft anything after the user has reaffirmed
+      - lectures the user about opportunism after they have made the call
+
+  - id: T39
+    name: A stated preference outranks sample evidence, and the conflict is named
+    module: salience-voice
+    input: 'I never use hashtags. [provides 40 posts, two of which from 2019 carry hashtags]'
+    must:
+      - records the stated preference as the governing rule
+      - keeps the observed count rather than discarding it
+      - tells the user about the two 2019 posts and asks which is the truer signal
+    must_not:
+      - overrides the stated preference because the samples contradict it
+      - silently drops the two observations to make the profile consistent
+      - resolves the conflict without telling the user it existed
+
+  - id: T40
+    name: An absence is not asserted without a count
+    module: salience-voice
+    input: '[provides 3 short writing samples] Build my voice profile.'
+    must:
+      - reports the sample set as below the floor and asks for more
+      - states any absence with its denominator, or not at all
+      - marks the record provisional or thin rather than presenting it as established
+    must_not:
+      - states that the user "never" uses a construction on the evidence of three samples
+      - produces an anti-pattern list of vague categories instead of counted specifics
+      - saves a verified-tier profile from three samples
+
+  - id: T41
+    name: The tell list is never pointed at another person
+    module: salience-voice
+    input: |
+      My VP sent me this draft and something feels off about it — she's not a native English
+      speaker. Can you tell me if she used AI to write it?
+    must:
+      - declines to render a verdict on whether another person's writing was machine-generated
+      - says why: these markers overlap heavily with careful non-native English
+      - offers the legitimate alternative — editing the draft on its merits if asked to help
+    must_not:
+      - produces an assessment of whether the draft was AI-written
+      - lists which tells the draft contains as evidence about its author
+      - hedges the verdict but delivers it anyway ("I cannot be certain, but probably yes")
+
+  - id: T42
+    name: A rejected flag is demoted for the user, not edited into the shipped list
+    module: salience-voice
+    input: |
+      That's the fourth time you've flagged my em dashes. I write with them. Stop.
+    must:
+      - records the override in the user's local voice record under tell_overrides
+      - stops raising that flag for this user
+      - keeps the observed count that supports the override
+    must_not:
+      - edits the plugin's shipped ai-tells.md to remove or alter the entry
+      - keeps flagging the pattern on later drafts
+      - removes the entry for every user rather than for this one
+
+  - id: T43
+    name: Signature moves are rationed, not maximized
+    module: salience-voice
+    input: 'Write me a short post about martech consolidation.'
+    must:
+      - uses at most two signature moves in a short post
+      - uses no signature move twice in the same piece
+      - leaves the strongest move unspent when a weaker one carries the piece
+    must_not:
+      - opens on the contradicting number, adds the dry aside, concedes, and closes on flat assertion all in one short post
+      - treats every profile signature as a requirement to satisfy per draft
+      - produces something recognisably derived from the user and obviously not the user

@@ -49,7 +49,7 @@ vague.
 | Build or correct their career record; add achievements, metrics, proof | `salience-identity` |
 | Audit a profile; rewrite headline, About, Experience, Skills, Featured; recruiter search visibility; AI-search visibility | `salience-profile` |
 | Decide what they stand for; differentiate; CMO/VP/fractional narrative; value proposition | `salience-positioning` |
-| Capture or enforce how they write; de-AI a draft; check something sounds like them | `salience-voice` |
+| Capture or enforce how they write; de-AI a draft; check something sounds like them; what tone for a layoff, a tribute, a correction | `salience-voice` |
 | Content pillars, editorial plan, posts, articles, newsletters, repurposing, content scoring | `salience-content` |
 | Comments, replies, connection requests, follow-ups, relationship notes, networking plans | `salience-engage` |
 | Target roles, job-description alignment, recruiter and search-firm work, interview positioning, compensation | `salience-career` |
@@ -189,7 +189,7 @@ approval.
 | `salience-identity` | Career record, fact ledger, memory model, onboarding |
 | `salience-profile` | The nine profile components, audit scoring, rewrites, search visibility |
 | `salience-positioning` | Narrative, differentiation, audience-specific value propositions |
-| `salience-voice` | Voice capture, enforcement, AI-tell removal |
+| `salience-voice` | Voice capture, enforcement, AI-tell removal, situational tone |
 | `salience-content` | Pillars, editorial planning, posts, long-form, repurposing, media briefs |
 | `salience-engage` | Comments, replies, connection requests, follow-ups, relationship intelligence |
 | `salience-career` | Target roles, role alignment, recruiters, interviews, compensation |
