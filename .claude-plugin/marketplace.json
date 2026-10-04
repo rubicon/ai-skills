@@ -61,6 +61,11 @@
       "name": "pitstop",
       "source": "./plugins/pitstop",
       "description": "Save what a compact or clear would destroy, then rebuild status after it, with a verified handoff."
+    },
+    {
+      "name": "loadout",
+      "source": "./plugins/loadout",
+      "description": "Audit which plugins and skills a project loads, recommend a per-project set, apply it after approval, and verify it from fresh sessions."
     }
   ]
 }
