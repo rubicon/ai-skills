@@ -62,6 +62,7 @@ Install from this repository's marketplace (`rubicon`):
 | [backup-before-troubleshooting](plugins/backup-before-troubleshooting/README.md) | Stand up a dated, self-documenting recovery workspace before changing system, app, or config state |
 | [session-messaging](plugins/session-messaging/README.md) | Cross-session messaging for Claude Code Desktop — how sessions message each other and report their own address |
 | [pitstop](plugins/pitstop/README.md) | Save what a compact or clear would destroy, then rebuild status after it, with a verified handoff |
+| [loadout](plugins/loadout/README.md) | Audit which plugins and skills a project loads, recommend a per-project set, apply it after approval, and verify it from fresh sessions |
 | [rubicon-marketing-board](https://github.com/rubicon/rubicon-marketing-board) | A nine-seat marketing advisory board for Claude Code (external source) |
 
 
