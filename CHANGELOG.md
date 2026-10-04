@@ -44,6 +44,7 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `pitstop` `catch-up` skill: a two-to-three-sentence "where was I" on the current branch, read from the uncommitted diff, the branch's commits and PR, and the handoff checked against git. Inspired by OpenChamber's `/catch-up` magic prompt (https://github.com/openchamber/openchamber, MIT)
 - `pitstop` plugin (v0.1.0): save what a compact or clear would destroy, then rebuild status after it. Four skills (`park`, `sitrep`, `checkpoint`, `setup`) and a tested verifier that fails a handoff naming a missing path, line, or commit, or a draft that was described but never saved
 - `relocate-session` skill (v1.0.0) — relocate a Claude Code session, or a whole project
   directory, without silently orphaning auto-memory: memory is keyed to the git repository
