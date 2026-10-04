@@ -44,6 +44,7 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `second-look` skill (v0.1.0): an intent-first review by a fresh agent, driven by a required packet of the original ask, later changes, final requirements, and deferrals, with `/code-review` run alongside and findings tagged `[intent]` or `[bugs]`. Adapted from OpenChamber's `/handoff-review` and `/workspace-review` magic prompts (https://github.com/openchamber/openchamber, MIT)
 - `grand-tour` skill (v0.1.0): a five-part onboarding tour of a codebase with one real flow traced through named files, using a code-graph index when one exists. Adapted from OpenChamber's `/explore` magic prompt (https://github.com/openchamber/openchamber, MIT)
 - `goalpost` skill (v0.1.0): writes a Claude Code `/goal` line with an observable outcome, evidence shown in the conversation, constraints, and an escape clause, so an impossible goal stops instead of looping. Adapted from OpenChamber's `/craft-goal` magic prompt (https://github.com/openchamber/openchamber, MIT)
 - `showdown` skill (v0.1.0): compares two or three genuinely distinct approaches to a known goal in one fixed-column table, picks one argued from the goal, and names the condition that would flip it; no plan, no code. Adapted from OpenChamber's `/weigh` magic prompt (https://github.com/openchamber/openchamber, MIT)
