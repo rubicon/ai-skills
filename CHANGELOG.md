@@ -44,6 +44,7 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `grand-tour` skill (v0.1.0): a five-part onboarding tour of a codebase with one real flow traced through named files, using a code-graph index when one exists. Adapted from OpenChamber's `/explore` magic prompt (https://github.com/openchamber/openchamber, MIT)
 - `goalpost` skill (v0.1.0): writes a Claude Code `/goal` line with an observable outcome, evidence shown in the conversation, constraints, and an escape clause, so an impossible goal stops instead of looping. Adapted from OpenChamber's `/craft-goal` magic prompt (https://github.com/openchamber/openchamber, MIT)
 - `showdown` skill (v0.1.0): compares two or three genuinely distinct approaches to a known goal in one fixed-column table, picks one argued from the goal, and names the condition that would flip it; no plan, no code. Adapted from OpenChamber's `/weigh` magic prompt (https://github.com/openchamber/openchamber, MIT)
 - `pitstop` `catch-up` skill: a two-to-three-sentence "where was I" on the current branch, read from the uncommitted diff, the branch's commits and PR, and the handoff checked against git. Inspired by OpenChamber's `/catch-up` magic prompt (https://github.com/openchamber/openchamber, MIT)
