@@ -8,6 +8,7 @@ A long Claude Code session ends in a compact or a clear, and both throw context 
 
 - `/pitstop:park`: before a compact or clear. Saves drafts, writes and verifies the handoff, writes the journal entry, and tells you whether to clear or compact.
 - `/pitstop:sitrep`: at the start of a session. Reports what needs you, what is done, and what is outstanding. Read-only.
+- `/pitstop:catch-up`: coming back after time away. Two or three sentences on where the current branch stands and the next real piece of work. Read-only. Use `sitrep` for everything else in flight.
 - `/pitstop:checkpoint`: the journal entry on its own.
 - `/pitstop:setup`: route the handoff, journal, decision records, or status checks to tools you already use.
 
@@ -36,5 +37,9 @@ None is required. With no configuration, the handoff goes to `.remember/remember
 - Configuration is per user, not per project.
 - pitstop does not commit the files it writes. Whether the handoff directory is in version control is your choice; drafts may hold text you have not published.
 - Nothing can stop `/clear`. Run park first.
+
+## Credits
+
+`catch-up` is adapted from the `/catch-up` magic prompt in [OpenChamber](https://github.com/openchamber/openchamber) (MIT, Copyright (c) 2025 Bohdan Triapitsyn). The wording here is pitstop's own.
 
 See [CHANGELOG.md](CHANGELOG.md).
