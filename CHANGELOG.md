@@ -44,6 +44,7 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `goalpost` skill (v0.1.0): writes a Claude Code `/goal` line with an observable outcome, evidence shown in the conversation, constraints, and an escape clause, so an impossible goal stops instead of looping. Adapted from OpenChamber's `/craft-goal` magic prompt (https://github.com/openchamber/openchamber, MIT)
 - `showdown` skill (v0.1.0): compares two or three genuinely distinct approaches to a known goal in one fixed-column table, picks one argued from the goal, and names the condition that would flip it; no plan, no code. Adapted from OpenChamber's `/weigh` magic prompt (https://github.com/openchamber/openchamber, MIT)
 - `pitstop` `catch-up` skill: a two-to-three-sentence "where was I" on the current branch, read from the uncommitted diff, the branch's commits and PR, and the handoff checked against git. Inspired by OpenChamber's `/catch-up` magic prompt (https://github.com/openchamber/openchamber, MIT)
 - `pitstop` plugin (v0.1.0): save what a compact or clear would destroy, then rebuild status after it. Four skills (`park`, `sitrep`, `checkpoint`, `setup`) and a tested verifier that fails a handoff naming a missing path, line, or commit, or a draft that was described but never saved

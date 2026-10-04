@@ -28,7 +28,7 @@ skillshare install github.com/rubicon/ai-skills -s relocate-session
 skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory
 
 # Every skill published here
-skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory,identity-theft,relocate-session,rubicon-wordpress-version-lab,secret-santa-generator,showdown,work-evidence-research
+skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory,goalpost,identity-theft,relocate-session,rubicon-wordpress-version-lab,secret-santa-generator,showdown,work-evidence-research
 ```
 
 ## Skills
@@ -42,6 +42,7 @@ skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory,i
 | [cache-money](skills/cache-money/SKILL.md) | Keep Claude Code sessions cheap and sharp — session hygiene, `CLAUDE.md` discipline, native auto-compaction controls, model selection, and context-cost habits |
 | [codebase-memory](skills/codebase-memory/SKILL.md) | Query a codebase knowledge graph via MCP instead of grep — callers, impact radius, architecture, dead code, and tiered evidence standards |
 | [relocate-session](skills/relocate-session/SKILL.md) | Move a session or a whole project directory to a new path without silently orphaning auto-memory — carries it across, verifies it, and reports what stays behind |
+| [goalpost](skills/goalpost/SKILL.md) | Write a Claude Code `/goal` line a long unattended run can finish — observable outcome, evidence shown in the conversation, constraints, and an escape clause so an impossible goal stops instead of looping |
 | [showdown](skills/showdown/SKILL.md) | Put two or three genuinely different approaches head to head on the same terms, pick one argued from the goal, and name what would flip it — a decision, not a plan |
 
 ## Plugins
