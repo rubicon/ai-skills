@@ -15,6 +15,7 @@ The user stepped away and wants their bearings: a teammate's two-minute catch-up
 Run these yourself and do not narrate them. Bound every command.
 
 - `git branch --show-current`, the default branch (`git symbolic-ref --short refs/remotes/origin/HEAD`, else `main` or `master`), `git status --short | head -20`, `git diff HEAD --stat`, then `git diff HEAD` on the files that changed.
+- `git ls-files --others --exclude-standard | head -20`, then read those files. New files that were never added are invisible to `git diff`, and unfinished work often lives in them.
 - On a feature branch: `git log --oneline <default>..HEAD | head -15`, then read the diffs of those commits, newest first, until what the branch is for and how it is being built is clear. When `gh` is present: `gh pr view --json number,title,state,reviewDecision,url` for this branch, and the PR's latest review comments if it has any. When the branch name carries an issue number (`dev/12-…`, `feature/12-…`), `gh issue view <n> --json title,body`.
 - On the default branch: `git log --oneline -5` and a light skim of those diffs.
 - `git rev-list --left-right --count HEAD...@{upstream}` when an upstream exists. Behind means someone pushed.
