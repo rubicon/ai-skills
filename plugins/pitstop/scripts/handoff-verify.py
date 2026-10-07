@@ -30,11 +30,26 @@ Usage:  handoff-verify.py [--root DIR] [HANDOFF]   (default: .remember/remember.
         handoff-verify.py --where [--config FILE]
                 prints root, config, handoff, drafts and journal, one
                 "key: value" line each, resolved from the working directory
+        handoff-verify.py --claim [--session ID] [--config FILE]
+                reserves this session's handoff file and prints session, existing and write.
+                park writes the handoff to "write:", which already holds a "Session: <id>"
+                stub. "write:" is the handoff path unless another session (or an unstamped
+                file) owns it, then a sibling named for this session. The reservation is
+                created exclusively, so two sessions cannot be given the same path.
+                --session passes back the "session:" value an earlier claim printed, for a
+                session that has no id in its environment
+        handoff-verify.py --list [--config FILE]
+                one line per handoff in the handoff directory:
+                "path | session <id or none> | <N> min"
+        handoff-verify.py --prune [--days N] [--config FILE]
+                deletes handoffs older than N days (default 30) and prints "pruned: <path>"
+                for each. Only the handoff file and its stamped remember-*.md siblings; never
+                drafts, the journal, a symlink, or a remember-*.md file with no Session line
 Exit:   0 = clean, 1 = findings, 2 = cannot read the handoff or could not verify
 Used by /pitstop:park (after writing the handoff) and /pitstop:sitrep (before
 repeating it).
 """
-import os, re, subprocess, sys, time
+import glob, os, re, subprocess, sys, time
 
 TOKEN = re.compile(r"`([^`\n]+)`")
 # ponytail: a path must contain "/" and end in an extension with a letter.
@@ -48,6 +63,12 @@ ANCHOR = re.compile(r":\d+(?:-\d+)?$")
 NO_DRAFTS = re.compile(r"\b(?:none|no)\s+(?:\w+\s+)?(?:drafted|unposted|unsent)\b", re.I)
 ACK = "(unverified)"
 DEFAULT_HANDOFF = ".remember/remember.md"
+STAMP = re.compile(r"^Session:[ \t]*(\S+)[ \t]*$", re.M)
+# The desktop app and the CLI both set the first; only the desktop app sets the second.
+SESSION_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_HOST_SESSION_ID")
+PRUNE_DAYS = 30
+MODES = {"--where": {"--config"}, "--list": {"--config"},
+         "--claim": {"--config", "--session"}, "--prune": {"--config", "--days"}}
 # A hung git (stale lock, slow network filesystem) must end as exit 2 through run(),
 # not block park or sitrep forever.
 GIT_TIMEOUT = 60
@@ -140,18 +161,124 @@ def where(cwd, config):
             ("drafts", os.path.join(hdir, "drafts")), ("journal", os.path.join(hdir, "journal.md"))]
 
 
+def session_id():
+    """This session's id from the environment. Without one, a fresh token: it never matches an
+    existing stamp, so park writes a sibling rather than replacing anything."""
+    for var in SESSION_VARS:
+        if os.environ.get(var):
+            return os.environ[var]
+    return "anon-" + os.urandom(4).hex()
+
+
+def handoff_owner(path):
+    """The id in the file's Session line, or None if it has none or cannot be read."""
+    try:
+        with open(path, errors="replace") as fh:
+            m = STAMP.search(fh.read())
+    except OSError:
+        return None
+    return m.group(1) if m else None
+
+
+def age_minutes(path):
+    return int((time.time() - os.path.getmtime(path)) // 60)
+
+
+def reserve(path, me):
+    """Create path stamped for me unless it exists. Returns (owner state, True if created).
+    Exclusive creation is what makes two simultaneous claims land on different files."""
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        owner = handoff_owner(path)
+        age = f"{age_minutes(path)} min"
+        if owner == me:
+            return f"own ({age})", False
+        return (f"other {owner} ({age})" if owner else f"unstamped ({age})"), False
+    with os.fdopen(fd, "w") as fh:
+        fh.write(f"# Handoff\nSession: {me}\n")
+    return "none", True
+
+
+def claim_handoff(cwd, config, session=None):
+    """session, existing and write for a park that is about to write a handoff. `existing` is
+    what the configured handoff path held before the claim; `write` is a file now reserved."""
+    handoff = dict(where(cwd, config))["handoff"]
+    me = session or session_id()
+    os.makedirs(os.path.dirname(handoff), exist_ok=True)
+    existing, created = reserve(handoff, me)
+    target = handoff
+    if not created and not existing.startswith("own"):
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", me)
+        n = 1
+        while True:
+            target = os.path.join(os.path.dirname(handoff), f"remember-{safe}" + (f"-{n}" if n > 1 else "") + ".md")
+            state, created = reserve(target, me)
+            if created or state.startswith("own"):
+                break
+            n += 1
+    return [("session", me), ("existing", existing), ("write", target)]
+
+
+def handoff_files(cwd, config):
+    """The configured handoff file, if present, and its remember-*.md siblings in the same
+    directory. A sibling counts only if it carries a Session stamp, because park is what writes
+    those; a file someone else named remember-notes.md is not a handoff and is never touched."""
+    handoff = dict(where(cwd, config))["handoff"]
+    found = [handoff] if os.path.isfile(handoff) else []
+    siblings = glob.glob(os.path.join(glob.escape(os.path.dirname(handoff)), "remember-*.md"))
+    return found + sorted(p for p in siblings if handoff_owner(p))
+
+
+def handoffs(cwd, config):
+    return [(p, handoff_owner(p) or "none", age_minutes(p)) for p in handoff_files(cwd, config)]
+
+
+def prune(cwd, config, days):
+    """Delete handoff files not touched for `days` days. Symlinks are left alone."""
+    cutoff = time.time() - days * 86400
+    removed = []
+    for path in handoff_files(cwd, config):
+        if os.path.islink(path) or not os.path.isfile(path) or os.path.getmtime(path) >= cutoff:
+            continue
+        removed.append((path, int((time.time() - os.path.getmtime(path)) // 86400)))
+        os.unlink(path)
+    return removed
+
+
 def main(argv):
     args = argv[1:]
-    if args[:1] == ["--where"]:
-        if len(args) == 1:
-            config = None
-        elif len(args) == 3 and args[1] == "--config":
-            config = args[2]
-        else:
-            print("usage: handoff-verify.py --where [--config FILE]", file=sys.stderr)
+    if args[:1] and args[0] in MODES:
+        flag, rest = args[0], args[1:]
+        opts = {}
+        ok = len(rest) % 2 == 0
+        for i in range(0, len(rest) - 1, 2):
+            if rest[i] not in MODES[flag] or rest[i] in opts:
+                ok = False
+            opts[rest[i]] = rest[i + 1]
+        days = PRUNE_DAYS
+        if ok and "--days" in opts:
+            if opts["--days"].isdigit() and int(opts["--days"]) >= 1:
+                days = int(opts["--days"])
+            else:
+                ok = False
+        if not ok:
+            shown = " ".join(f"[{o} {o[2:].upper()}]" for o in sorted(MODES[flag]))
+            print(f"usage: handoff-verify.py {flag} {shown}", file=sys.stderr)
             return 2
-        for key, value in where(os.getcwd(), config):
-            print(f"{key}: {value}")
+        config = opts.get("--config")
+        if flag == "--list":
+            for path, owner, age in handoffs(os.getcwd(), config):
+                print(f"{path} | session {owner} | {age} min")
+        elif flag == "--prune":
+            for path, old in prune(os.getcwd(), config, days):
+                print(f"pruned: {path} ({old} days old)")
+        elif flag == "--claim":
+            for key, value in claim_handoff(os.getcwd(), config, opts.get("--session")):
+                print(f"{key}: {value}")
+        else:
+            for key, value in where(os.getcwd(), config):
+                print(f"{key}: {value}")
         return 0
     root_arg = None
     if args[:1] == ["--root"]:
