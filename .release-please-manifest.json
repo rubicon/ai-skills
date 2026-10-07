@@ -6,5 +6,5 @@
   "skills/identity-theft": "0.1.1",
   "skills/cache-money": "1.1.1",
   "plugins/backup-before-troubleshooting": "0.1.0",
-  "plugins/pitstop": "0.1.0"
+  "plugins/pitstop": "0.2.0"
 }
