@@ -44,6 +44,7 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `anger-translator` skill (v0.1.0): rewrites a heated draft into a firm, professional message that keeps every fact, the ask, and any consequence the user stated, removes the heat, and flags political or legal risk. Inspired by the *Key & Peele* anger translator sketches, run in reverse
 - `pitstop` Facts section: an optional fifth configuration section that lets `checkpoint` keep a fact store current, looking up each fact the session confirmed before replacing a changed value or adding a new one, and skipping unconfirmed, multi-valued, or conflicting facts. Off by default
 - `loadout` plugin (v0.1.0): per-project plugin and skill audit with an approval stop, applied to `.claude/settings.local.json` and verified against fresh headless sessions by a tested script
 - `second-look` skill (v0.1.0): an intent-first review by a fresh agent, driven by a required packet of the original ask, later changes, final requirements, and deferrals, with `/code-review` run alongside and findings tagged `[intent]` or `[bugs]`. Adapted from OpenChamber's `/handoff-review` and `/workspace-review` magic prompts (https://github.com/openchamber/openchamber, MIT)
