@@ -580,6 +580,53 @@ class HandoffOwnership(unittest.TestCase):
             self.assertEqual(owners, [f"Session: {SESSION_A}", f"Session: {SESSION_B}"])
 
 
+class HandoffStampCheck(unittest.TestCase):
+    """park verifies the file it wrote carries this session's stamp, so a handoff that lost its
+    Session line cannot pass and then vanish from sitrep."""
+
+    def setUp(self):
+        self.repo = Repo()
+        self.addCleanup(self.repo.tmp.cleanup)
+
+    def verify(self, text, *flags, name="remember-bbbbbbbb.md"):
+        self.repo.write(f".remember/{name}", text)
+        path = os.path.join(self.repo.root, ".remember", name)
+        r = subprocess.run([sys.executable, SCRIPT, *flags, path], capture_output=True, text=True, cwd="/")
+        return r.returncode, r.stdout, r.stderr
+
+    def test_a_handoff_carrying_the_expected_session_passes(self):
+        rc, out, err = self.verify(f"# Handoff\nSession: {SESSION_B}\n\n## State\n", "--session", SESSION_B)
+        self.assertEqual(rc, 0, out + err)
+
+    def test_a_handoff_with_no_session_line_fails_and_says_so(self):
+        rc, out, err = self.verify("# Handoff\n\n## State\nwork\n", "--session", SESSION_B)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("STAMP-MISMATCH", out)
+        self.assertIn("no Session line", out)
+
+    def test_a_handoff_stamped_for_another_session_fails(self):
+        rc, out, err = self.verify(f"# Handoff\nSession: {SESSION_A}\n", "--session", SESSION_B)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("STAMP-MISMATCH", out)
+        self.assertIn(SESSION_A, out)
+
+    def test_without_the_flag_an_unstamped_handoff_still_passes(self):
+        rc, out, err = self.verify("# Handoff\n\n## State\n")
+        self.assertEqual(rc, 0, out + err)
+
+    def test_root_and_session_can_come_in_either_order(self):
+        text = f"# Handoff\nSession: {SESSION_B}\n"
+        for flags in (["--root", self.repo.root, "--session", SESSION_B],
+                      ["--session", SESSION_B, "--root", self.repo.root]):
+            rc, out, err = self.verify(text, *flags)
+            self.assertEqual(rc, 0, f"{flags}: {out}{err}")
+
+    def test_session_flag_with_no_value_exits_2(self):
+        r = subprocess.run([sys.executable, SCRIPT, "--session"], capture_output=True, text=True, cwd="/")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("usage", r.stderr)
+
+
 class HandoffPrune(unittest.TestCase):
     """Handoff files must not pile up: stale ones are removed, live ones never are."""
 

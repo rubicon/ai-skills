@@ -25,8 +25,10 @@ ACKNOWLEDGED and does not fail: that is how an identifier from another repo is
 carried honestly. The marker covers the whole line, and a missing or empty
 draft file is never acknowledgeable.
 
-Usage:  handoff-verify.py [--root DIR] [HANDOFF]   (default: .remember/remember.md)
+Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .remember/remember.md)
                 --root sets the project root outside git; pass the root: --where printed
+                --session ID also requires the file to carry "Session: ID", so a handoff that
+                lost its stamp fails here instead of becoming invisible to --list and --prune
         handoff-verify.py --where [--config FILE]
                 prints root, config, handoff, drafts and journal, one
                 "key: value" line each, resolved from the working directory
@@ -280,12 +282,16 @@ def main(argv):
             for key, value in where(os.getcwd(), config):
                 print(f"{key}: {value}")
         return 0
-    root_arg = None
-    if args[:1] == ["--root"]:
+    root_arg = session_arg = None
+    while args[:1] in (["--root"], ["--session"]):
         if len(args) < 2:
-            print("usage: handoff-verify.py [--root DIR] [HANDOFF]", file=sys.stderr)
+            print("usage: handoff-verify.py [--root DIR] [--session ID] [HANDOFF]", file=sys.stderr)
             return 2
-        root_arg, args = os.path.abspath(args[1]), args[2:]
+        if args[0] == "--root":
+            root_arg = os.path.abspath(args[1])
+        else:
+            session_arg = args[1]
+        args = args[2:]
     handoff = os.path.abspath(args[0] if args else DEFAULT_HANDOFF)
     try:
         with open(handoff, errors="replace") as fh:
@@ -394,6 +400,13 @@ def main(argv):
             elif any(d.startswith(done_real) for d in named):
                 findings.append(f"DONE-DRAFT-CLAIMED line {n + 1}: says \"{said}\" "
                                 f"but names a file in {os.path.relpath(drafts_dir, root)}/done/")
+
+    if session_arg:
+        owner = handoff_owner(handoff)
+        if owner != session_arg:
+            found = f"Session: {owner}" if owner else "no Session line"
+            # Never acknowledgeable: an unstamped or mis-stamped handoff is invisible to --list.
+            findings.append(f"STAMP-MISMATCH line 0: expected Session: {session_arg}, found {found}")
 
     on_disk = sorted(f for f in os.listdir(drafts_dir)
                      if not f.startswith(".") and os.path.isfile(os.path.join(drafts_dir, f))) \
