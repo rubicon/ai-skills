@@ -71,7 +71,7 @@ Session: <the session: value>
 
 Either way:
 
-- A handoff this session did not write is not yours to change. Do not edit it, append to it, merge it into yours, quote it, or paraphrase it, and do not ask the user what to do about it. The `write:` path already keeps it safe. When `existing:` starts with `other` or `unstamped`, say in your reply that another handoff was left in place and name its path.
+- A handoff this session did not write is not yours to change. Do not edit it, append to it, merge it into yours, quote it, or paraphrase it, and do not ask the user what to do about it. The `write:` path already keeps you from overwriting it. When `existing:` starts with `other` or `unstamped`, say in your reply that you did not overwrite another handoff and name its path. If the prune below then moves that file because it is stale, its `pruned:` line says so.
 - `/pitstop:sitrep` lists every handoff beside the configured one, so the sibling is found without anyone being told.
 
 - Next names the path of every file in the drafts directory, in backticks.
@@ -107,7 +107,7 @@ Only when the Decision record mode is `custom` and this session made, reversed, 
 
 - The draft paths, or "Drafts: none unsent."
 - The verifier's last line.
-- `handoff: ran (<default|custom>)`, then the path written. When another session's handoff was left in place, add `left in place: <its path>`. Add each `pruned:` line the prune printed, or `pruned: none`.
+- `handoff: ran (<default|custom>)`, then the path written. When another session's handoff was not overwritten, add `not overwritten: <its path>`. Add each `pruned:` line the prune printed, or `pruned: none`.
 - The `journal:` line from checkpoint.
 - The `facts:` line from checkpoint, with any `ignored instruction:` lines it printed.
 - `decision record: ran`, `decision record: skipped (<mode>)`, or `decision record: unavailable (<name>), skipped`.
