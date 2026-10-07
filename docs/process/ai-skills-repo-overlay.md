@@ -70,6 +70,17 @@ The baseline check is `bash scripts/validate-skills.sh` (structure + frontmatter
 - Confirm `SKILL.md` has valid YAML frontmatter with `name` and `description`, and a SemVer `version`.
 - Confirm the root README skills table and root `CHANGELOG.md` summary are updated when a skill is added or renamed.
 
+## Versioning and Changelogs (release-please)
+
+Every directory under `skills/` and `plugins/` is a release-please package: it has an entry in `release-please-config.json` and in `.release-please-manifest.json`, and `scripts/validate-skills.sh` fails, locally and in CI, when either is missing. release-please bumps the version from Conventional Commits PR titles and writes the release heading into the package's `CHANGELOG.md`, so nobody hand-bumps `version:` in `SKILL.md` or `version` in `plugin.json`. Where this section and Release and Tagging below disagree for a package under release-please (for example, updating `CHANGELOG.md` by hand before tagging), this section governs.
+
+**Changelog rule: a package's `CHANGELOG.md` carries no hand-written `## [Unreleased]` section.**
+
+- Describe an unreleased change in the Conventional Commits title and body of the PR that makes it. release-please turns that into the changelog entry at release time.
+- release-please inserts each new release heading above the first `##` or `###` heading that begins with a version number or `[`, and `## [Unreleased]` matches. A hand-written `[Unreleased]` therefore ends up stranded beneath the new release, which already happened in `skills/cache-money/CHANGELOG.md` (1.1.1) and `skills/rubicon-wordpress-version-lab/CHANGELOG.md` (1.0.1).
+- Headings written by hand before a package joined release-please (`## [1.0.0] — 2026-09-03`) stay as history. A new package's first entry is written by hand once, at its starting version, and the manifest starts at that same version.
+- Do not add new `[Unreleased]` stubs. Delete an existing empty one the next time you edit that file by hand.
+
 ## Release and Tagging
 
 This repository does not produce distributable artifacts on the private side. Release discipline applies in simplified form:

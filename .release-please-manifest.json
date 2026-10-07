@@ -5,6 +5,16 @@
   "skills/rubicon-wordpress-version-lab": "1.0.1",
   "skills/identity-theft": "0.1.1",
   "skills/cache-money": "1.1.1",
+  "skills/anger-translator": "0.1.0",
+  "skills/codebase-memory": "1.0.0",
+  "skills/goalpost": "0.1.0",
+  "skills/grand-tour": "0.1.0",
+  "skills/relocate-session": "1.0.0",
+  "skills/second-look": "0.1.0",
+  "skills/showdown": "0.1.0",
   "plugins/backup-before-troubleshooting": "0.1.0",
-  "plugins/pitstop": "0.2.0"
+  "plugins/pitstop": "0.2.0",
+  "plugins/loadout": "0.1.0",
+  "plugins/salience": "0.5.0",
+  "plugins/session-messaging": "0.1.0"
 }

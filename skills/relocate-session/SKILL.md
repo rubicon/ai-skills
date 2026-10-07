@@ -1,6 +1,6 @@
 ---
 name: relocate-session
-version: 1.0.0
+version: 1.0.0  # x-release-please-version
 description: >-
   Use when moving a Claude Code session to a different project directory, or
   when a project directory itself has moved or been renamed. Changing the
