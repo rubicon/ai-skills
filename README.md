@@ -28,7 +28,7 @@ skillshare install github.com/rubicon/ai-skills -s relocate-session
 skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory
 
 # Every skill published here
-skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory,goalpost,grand-tour,identity-theft,relocate-session,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
+skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memory,goalpost,grand-tour,identity-theft,relocate-session,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
 ```
 
 ## Skills
@@ -46,6 +46,7 @@ skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory,g
 | [grand-tour](skills/grand-tour/SKILL.md) | An onboarding tour of a codebase — what it is, its main parts, one real flow traced through the code, the traps a newcomer hits, and where to start |
 | [goalpost](skills/goalpost/SKILL.md) | Write a Claude Code `/goal` line a long unattended run can finish — observable outcome, evidence shown in the conversation, constraints, and an escape clause so an impossible goal stops instead of looping |
 | [showdown](skills/showdown/SKILL.md) | Put two or three genuinely different approaches head to head on the same terms, pick one argued from the goal, and name what would flip it — a decision, not a plan |
+| [anger-translator](skills/anger-translator/SKILL.md) | Turn a heated draft into a firm, professional message you can send at work — keeps the facts, the ask, and the consequences you stated; removes the heat; flags the political risk |
 
 ## Plugins
 
