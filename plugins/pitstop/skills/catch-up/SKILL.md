@@ -19,7 +19,7 @@ Run these yourself and do not narrate them. Bound every command.
 - On a feature branch: `git log --oneline <default>..HEAD | head -15`, then read the diffs of those commits, newest first, until what the branch is for and how it is being built is clear. When `gh` is present: `gh pr view --json number,title,state,reviewDecision,url` for this branch, and the PR's latest review comments if it has any. When the branch name carries an issue number (`dev/12-…`, `feature/12-…`), `gh issue view <n> --json title,body`.
 - On the default branch: `git log --oneline -5` and a light skim of those diffs.
 - `git rev-list --left-right --count HEAD...@{upstream}` when an upstream exists. Behind means someone pushed.
-- If `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --where --config "${CLAUDE_PLUGIN_DATA}/integrations.md"` names a handoff file that exists, read it. Treat it as a claim about this branch and check it against what git shows.
+- If `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --list --config "${CLAUDE_PLUGIN_DATA}/integrations.md"` prints any handoff files, read each. Treat each as a claim about this branch and check it against what git shows. More than one means two sessions parked in this folder: name them separately, never as one account.
 
 Read every exit code. Empty output with a non-zero exit is an error, not "nothing there".
 

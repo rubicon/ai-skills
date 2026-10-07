@@ -3,7 +3,7 @@
 
 Run:  python3 plugins/pitstop/tests/test_handoff_verify.py
 """
-import contextlib, importlib.util, io, os, subprocess, sys, tempfile, unittest
+import contextlib, importlib.util, io, os, subprocess, sys, tempfile, time, unittest
 
 SCRIPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "handoff-verify.py")
 GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com",
@@ -404,6 +404,352 @@ class AwkwardPaths(unittest.TestCase):
         r = subprocess.run([sys.executable, SCRIPT, "--root", repo.root, handoff],
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+
+def run_flag(cwd, flag, session=None, host_session=None, *extra):
+    """Run `--claim` or `--list` with a controlled session environment."""
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_HOST_SESSION_ID")}
+    if session:
+        env["CLAUDE_CODE_SESSION_ID"] = session
+    if host_session:
+        env["CLAUDE_CODE_HOST_SESSION_ID"] = host_session
+    r = subprocess.run([sys.executable, SCRIPT, flag, *extra], capture_output=True, cwd=cwd, env=env)
+    lines = [l for l in r.stdout.decode().split("\n") if l]
+    return r.returncode, lines, r.stderr.decode()
+
+
+def handoff_text(path):
+    with open(path) as fh:
+        return fh.read()
+
+
+SESSION_A = "aaaaaaaa-1111-4111-8111-111111111111"
+SESSION_B = "bbbbbbbb-2222-4222-8222-222222222222"
+
+
+class HandoffOwnership(unittest.TestCase):
+    """Two sessions in one folder must not replace each other's handoff."""
+
+    def setUp(self):
+        self.repo = Repo()
+        self.addCleanup(self.repo.tmp.cleanup)
+        self.canonical = os.path.join(self.repo.root, ".remember", "remember.md")
+
+    def claim(self, session=SESSION_A, host_session=None):
+        rc, lines, err = run_flag(self.repo.root, "--claim", session, host_session)
+        self.assertEqual(rc, 0, err)
+        return dict(l.split(": ", 1) for l in lines)
+
+    def test_no_handoff_writes_the_canonical_path(self):
+        d = self.claim()
+        self.assertEqual(d["session"], SESSION_A)
+        self.assertEqual(d["existing"], "none")
+        self.assertEqual(d["write"], self.canonical)
+
+    def test_own_handoff_is_replaced_in_place(self):
+        self.repo.write(".remember/remember.md", f"# Handoff\nSession: {SESSION_A}\n\n## State\n")
+        d = self.claim()
+        self.assertTrue(d["existing"].startswith("own"), d["existing"])
+        self.assertEqual(d["write"], self.canonical)
+
+    def test_another_sessions_handoff_is_never_the_write_target(self):
+        self.repo.write(".remember/remember.md", f"# Handoff\nSession: {SESSION_A}\n\n## State\n")
+        d = self.claim(SESSION_B)
+        self.assertTrue(d["existing"].startswith("other"), d["existing"])
+        self.assertIn(SESSION_A, d["existing"])
+        self.assertEqual(d["write"], os.path.join(self.repo.root, ".remember", f"remember-{SESSION_B}.md"))
+
+    def test_a_handoff_with_no_stamp_is_treated_as_someone_elses(self):
+        self.repo.write(".remember/remember.md", "# Handoff\n\n## State\n")
+        d = self.claim()
+        self.assertTrue(d["existing"].startswith("unstamped"), d["existing"])
+        self.assertNotEqual(d["write"], self.canonical)
+
+    def test_the_sibling_is_replaced_in_place_by_its_own_session(self):
+        self.repo.write(".remember/remember.md", f"# Handoff\nSession: {SESSION_A}\n")
+        self.repo.write(f".remember/remember-{SESSION_B}.md", f"# Handoff\nSession: {SESSION_B}\n")
+        d = self.claim(SESSION_B)
+        self.assertEqual(d["write"], os.path.join(self.repo.root, ".remember", f"remember-{SESSION_B}.md"))
+
+    def test_without_a_session_variable_a_token_is_generated_and_existing_handoffs_are_kept(self):
+        self.repo.write(".remember/remember.md", f"# Handoff\nSession: {SESSION_A}\n")
+        d = self.claim(session=None)
+        self.assertRegex(d["session"], r"^anon-[0-9a-f]{8}$")
+        self.assertNotEqual(d["write"], self.canonical)
+
+    def test_the_host_variable_is_used_when_the_session_variable_is_missing(self):
+        d = self.claim(session=None, host_session="local_host-session-9")
+        self.assertEqual(d["session"], "local_host-session-9")
+
+    def test_claim_honours_the_configured_handoff_path(self):
+        cfg = os.path.join(self.repo.root, "cfg.md")
+        with open(cfg, "w") as fh:
+            fh.write("---\nhandoff_path: notes/handoff.md\n---\n")
+        self.repo.write("notes/handoff.md", f"# Handoff\nSession: {SESSION_A}\n")
+        rc, lines, err = run_flag(self.repo.root, "--claim", SESSION_B, None, "--config", cfg)
+        d = dict(l.split(": ", 1) for l in lines)
+        self.assertEqual(d["write"], os.path.join(self.repo.root, "notes", f"remember-{SESSION_B}.md"))
+
+    def test_list_names_every_handoff_with_its_owner_and_skips_files_that_only_look_like_one(self):
+        self.repo.write(".remember/remember.md", f"# Handoff\nSession: {SESSION_A}\n")
+        self.repo.write(".remember/remember-bbbbbbbb.md", f"# Handoff\nSession: {SESSION_B}\n")
+        self.repo.write(".remember/remember-notes.md", "my own notes, not a handoff\n")
+        self.repo.write(".remember/journal.md", "not a handoff\n")
+        rc, lines, err = run_flag(self.repo.root, "--list")
+        self.assertEqual(rc, 0, err)
+        by_name = {os.path.basename(l.split(" | ")[0]): l.split(" | ") for l in lines}
+        self.assertEqual(sorted(by_name), ["remember-bbbbbbbb.md", "remember.md"])
+        self.assertEqual(by_name["remember.md"][1], f"session {SESSION_A}")
+        self.assertEqual(by_name["remember-bbbbbbbb.md"][1], f"session {SESSION_B}")
+        self.assertRegex(by_name["remember.md"][2], r"^\d+ min$")
+
+    def test_list_with_no_handoff_prints_nothing_and_exits_0(self):
+        rc, lines, err = run_flag(self.repo.root, "--list")
+        self.assertEqual((rc, lines), (0, []))
+
+    def test_the_verifier_accepts_a_sibling_that_names_the_other_sessions_draft(self):
+        self.repo.write(".remember/drafts/2026-10-05-reply.md", "Target: x\n\ntext\n")
+        self.repo.write(".remember/remember-bbbbbbbb.md",
+                        "# Handoff\nSession: bbbbbbbb\n\nDrafts: `.remember/drafts/2026-10-05-reply.md`\n")
+        r = subprocess.run([sys.executable, SCRIPT, os.path.join(self.repo.root, ".remember/remember-bbbbbbbb.md")],
+                           capture_output=True, text=True, cwd="/")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_bad_arguments_to_claim_and_list_exit_2(self):
+        for flag in ("--claim", "--list"):
+            r = subprocess.run([sys.executable, SCRIPT, flag, "--bogus"],
+                               capture_output=True, text=True, cwd=self.repo.root)
+            self.assertEqual(r.returncode, 2, flag)
+            self.assertIn("usage", r.stderr)
+
+    def test_claiming_reserves_the_path_so_a_second_claim_before_any_write_cannot_take_it(self):
+        a = self.claim(SESSION_A)
+        self.assertEqual(a["write"], self.canonical)
+        self.assertEqual(handoff_text(self.canonical).splitlines()[:2], ["# Handoff", f"Session: {SESSION_A}"])
+        b = self.claim(SESSION_B)
+        self.assertTrue(b["existing"].startswith("other"), b["existing"])
+        self.assertEqual(b["write"], os.path.join(self.repo.root, ".remember", f"remember-{SESSION_B}.md"))
+
+    def test_claiming_twice_as_the_same_session_keeps_the_same_file_and_its_text(self):
+        self.claim(SESSION_A)
+        with open(self.canonical, "a") as fh:
+            fh.write("## State\nwork\n")
+        d = self.claim(SESSION_A)
+        self.assertTrue(d["existing"].startswith("own"), d["existing"])
+        self.assertIn("work", handoff_text(self.canonical))
+
+    def test_a_sibling_already_held_by_someone_else_is_never_returned(self):
+        self.repo.write(".remember/remember.md", f"# Handoff\nSession: {SESSION_A}\n")
+        self.repo.write(f".remember/remember-{SESSION_B}.md", "# Handoff\nSession: somebody-else\nkeep me\n")
+        d = self.claim(SESSION_B)
+        self.assertEqual(d["write"], os.path.join(self.repo.root, ".remember", f"remember-{SESSION_B}-2.md"))
+        self.assertIn("keep me", handoff_text(os.path.join(self.repo.root, ".remember", f"remember-{SESSION_B}.md")))
+
+    def test_a_token_passed_back_with_session_is_recognised_as_this_session(self):
+        rc, lines, err = run_flag(self.repo.root, "--claim", None, None)
+        first = dict(l.split(": ", 1) for l in lines)
+        token = first["session"]
+        self.assertRegex(token, r"^anon-[0-9a-f]{8}$")
+        rc, lines, err = run_flag(self.repo.root, "--claim", None, None, "--session", token)
+        again = dict(l.split(": ", 1) for l in lines)
+        self.assertEqual(again["session"], token)
+        self.assertTrue(again["existing"].startswith("own"), again["existing"])
+        self.assertEqual(again["write"], self.canonical)
+
+    def test_session_flag_beats_the_environment(self):
+        rc, lines, err = run_flag(self.repo.root, "--claim", SESSION_A, None, "--session", "typed-by-hand")
+        self.assertEqual(dict(l.split(": ", 1) for l in lines)["session"], "typed-by-hand")
+
+    def test_two_claims_started_at_the_same_instant_never_get_the_same_path(self):
+        for round_ in range(25):
+            repo = Repo()
+            self.addCleanup(repo.tmp.cleanup)
+            procs = []
+            for sid in (SESSION_A, SESSION_B):
+                env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_HOST_SESSION_ID")}
+                env["CLAUDE_CODE_SESSION_ID"] = sid
+                procs.append(subprocess.Popen([sys.executable, SCRIPT, "--claim"], cwd=repo.root, env=env,
+                                              stdout=subprocess.PIPE, text=True))
+            writes = []
+            for proc in procs:
+                out, _ = proc.communicate()
+                writes.append(dict(l.split(": ", 1) for l in out.splitlines())["write"])
+            self.assertEqual(len(set(writes)), 2, f"round {round_}: {writes}")
+            owners = sorted(handoff_text(w).splitlines()[1] for w in writes)
+            self.assertEqual(owners, [f"Session: {SESSION_A}", f"Session: {SESSION_B}"])
+
+
+class HandoffStampCheck(unittest.TestCase):
+    """park verifies the file it wrote carries this session's stamp, so a handoff that lost its
+    Session line cannot pass and then vanish from sitrep."""
+
+    def setUp(self):
+        self.repo = Repo()
+        self.addCleanup(self.repo.tmp.cleanup)
+
+    def verify(self, text, *flags, name="remember-bbbbbbbb.md"):
+        self.repo.write(f".remember/{name}", text)
+        path = os.path.join(self.repo.root, ".remember", name)
+        r = subprocess.run([sys.executable, SCRIPT, *flags, path], capture_output=True, text=True, cwd="/")
+        return r.returncode, r.stdout, r.stderr
+
+    def test_a_handoff_carrying_the_expected_session_passes(self):
+        rc, out, err = self.verify(f"# Handoff\nSession: {SESSION_B}\n\n## State\n", "--session", SESSION_B)
+        self.assertEqual(rc, 0, out + err)
+
+    def test_a_handoff_with_no_session_line_fails_and_says_so(self):
+        rc, out, err = self.verify("# Handoff\n\n## State\nwork\n", "--session", SESSION_B)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("STAMP-MISMATCH", out)
+        self.assertIn("no Session line", out)
+
+    def test_a_handoff_stamped_for_another_session_fails(self):
+        rc, out, err = self.verify(f"# Handoff\nSession: {SESSION_A}\n", "--session", SESSION_B)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("STAMP-MISMATCH", out)
+        self.assertIn(SESSION_A, out)
+
+    def test_without_the_flag_an_unstamped_handoff_still_passes(self):
+        rc, out, err = self.verify("# Handoff\n\n## State\n")
+        self.assertEqual(rc, 0, out + err)
+
+    def test_root_and_session_can_come_in_either_order(self):
+        text = f"# Handoff\nSession: {SESSION_B}\n"
+        for flags in (["--root", self.repo.root, "--session", SESSION_B],
+                      ["--session", SESSION_B, "--root", self.repo.root]):
+            rc, out, err = self.verify(text, *flags)
+            self.assertEqual(rc, 0, f"{flags}: {out}{err}")
+
+    def test_session_flag_with_no_value_exits_2(self):
+        r = subprocess.run([sys.executable, SCRIPT, "--session"], capture_output=True, text=True, cwd="/")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("usage", r.stderr)
+
+
+class HandoffPrune(unittest.TestCase):
+    """Handoff files must not pile up: stale ones are moved into pruned/, live ones never are.
+    Nothing is deleted; pruned/ is never read or cleaned by pitstop."""
+
+    def setUp(self):
+        self.repo = Repo()
+        self.addCleanup(self.repo.tmp.cleanup)
+        self.rem = os.path.join(self.repo.root, ".remember")
+
+    def make(self, name, days_old, text="# Handoff\nSession: some-session\n"):
+        self.repo.write(f".remember/{name}", text)
+        t = time.time() - days_old * 86400
+        os.utime(os.path.join(self.rem, name), (t, t))
+
+    def prune(self, *extra):
+        r = subprocess.run([sys.executable, SCRIPT, "--prune", *extra], capture_output=True,
+                           text=True, cwd=self.repo.root)
+        return r.returncode, r.stdout.splitlines(), r.stderr
+
+    def exists(self, name):
+        return os.path.exists(os.path.join(self.rem, name))
+
+    def test_moves_handoffs_older_than_the_default_thirty_days_and_keeps_newer_ones(self):
+        self.make("remember.md", 31, "# Handoff\nSession: s1\nfirst\n")
+        self.make("remember-old.md", 60, "# Handoff\nSession: s2\nsecond\n")
+        self.make("remember-recent.md", 29)
+        rc, out, err = self.prune()
+        self.assertEqual(rc, 0, err)
+        self.assertFalse(self.exists("remember.md"))
+        self.assertFalse(self.exists("remember-old.md"))
+        self.assertTrue(self.exists("remember-recent.md"))
+        self.assertEqual(len(out), 2)
+        self.assertTrue(all(l.startswith("pruned: ") and " -> " in l for l in out), out)
+        with open(os.path.join(self.rem, "pruned", "remember.md")) as fh:
+            self.assertIn("first", fh.read())
+        with open(os.path.join(self.rem, "pruned", "remember-old.md")) as fh:
+            self.assertIn("second", fh.read())
+
+    def test_a_name_already_in_pruned_is_not_overwritten(self):
+        self.make("pruned/remember.md", 5, "# Handoff\nSession: earlier\nearlier text\n")
+        self.make("remember.md", 40, "# Handoff\nSession: later\nlater text\n")
+        rc, out, err = self.prune()
+        self.assertEqual(rc, 0, err)
+        with open(os.path.join(self.rem, "pruned", "remember.md")) as fh:
+            self.assertIn("earlier text", fh.read())
+        with open(os.path.join(self.rem, "pruned", "remember-2.md")) as fh:
+            self.assertIn("later text", fh.read())
+
+    def test_files_already_in_pruned_are_never_moved_again_or_listed(self):
+        self.make("pruned/remember-old.md", 90)
+        rc, out, err = self.prune()
+        self.assertEqual((rc, out), (0, []))
+        self.assertTrue(self.exists("pruned/remember-old.md"))
+        r = subprocess.run([sys.executable, SCRIPT, "--list"], capture_output=True, text=True, cwd=self.repo.root)
+        self.assertEqual(r.stdout, "")
+
+    def test_days_sets_the_cutoff(self):
+        self.make("remember-a.md", 2)
+        rc, out, err = self.prune("--days", "1")
+        self.assertFalse(self.exists("remember-a.md"))
+        self.make("remember-b.md", 2)
+        rc, out, err = self.prune("--days", "3")
+        self.assertTrue(self.exists("remember-b.md"))
+
+    def test_never_touches_drafts_the_journal_or_other_files(self):
+        self.make("journal.md", 90)
+        self.make("drafts/2026-09-01-reply.md", 90, "text\n")
+        self.make("remember-notes.txt", 90)
+        self.make("notes.md", 90)
+        rc, out, err = self.prune()
+        self.assertEqual((rc, out), (0, []))
+        for name in ("journal.md", "drafts/2026-09-01-reply.md", "remember-notes.txt", "notes.md"):
+            self.assertTrue(self.exists(name), name)
+
+    def test_a_remember_dash_file_without_a_session_stamp_is_never_moved(self):
+        self.make("remember-notes.md", 90, "my own notes\n")
+        self.make("remember-draft.md", 90, "# Handoff\nwritten by hand, no stamp\n")
+        rc, out, err = self.prune()
+        self.assertEqual((rc, out), (0, []))
+        self.assertTrue(self.exists("remember-notes.md"))
+        self.assertTrue(self.exists("remember-draft.md"))
+
+    def test_the_configured_handoff_file_is_moved_even_without_a_stamp(self):
+        self.make("remember.md", 60, "# Handoff\nwritten before handoffs carried a stamp\n")
+        rc, out, err = self.prune()
+        self.assertFalse(self.exists("remember.md"))
+        self.assertEqual(len(out), 1)
+
+    def test_a_symlink_named_like_a_handoff_is_not_followed(self):
+        target = os.path.join(self.repo.root, "precious.txt")
+        with open(target, "w") as fh:
+            fh.write("keep\n")
+        os.makedirs(self.rem, exist_ok=True)
+        os.symlink(target, os.path.join(self.rem, "remember-link.md"))
+        t = time.time() - 90 * 86400
+        os.utime(target, (t, t))
+        rc, out, err = self.prune()
+        self.assertTrue(os.path.exists(target))
+        self.assertEqual(out, [])
+
+    def test_with_no_handoffs_it_prints_nothing_and_exits_0(self):
+        rc, out, err = self.prune()
+        self.assertEqual((rc, out), (0, []))
+
+    def test_honours_a_configured_handoff_directory(self):
+        cfg = os.path.join(self.repo.root, "cfg.md")
+        with open(cfg, "w") as fh:
+            fh.write("---\nhandoff_path: notes/handoff.md\n---\n")
+        self.repo.write("notes/handoff.md", "# Handoff\n")
+        os.utime(os.path.join(self.repo.root, "notes", "handoff.md"), (1, 1))
+        self.make("remember-x.md", 90)
+        rc, out, err = self.prune("--config", cfg)
+        self.assertFalse(os.path.exists(os.path.join(self.repo.root, "notes", "handoff.md")))
+        self.assertTrue(os.path.exists(os.path.join(self.repo.root, "notes", "pruned", "handoff.md")))
+        self.assertTrue(self.exists("remember-x.md"))
+
+    def test_bad_days_or_arguments_exit_2_and_move_nothing(self):
+        self.make("remember-a.md", 90)
+        for args in (["--days", "0"], ["--days", "x"], ["--days"], ["--bogus", "1"]):
+            rc, out, err = self.prune(*args)
+            self.assertEqual(rc, 2, args)
+            self.assertIn("usage", err)
+        self.assertTrue(self.exists("remember-a.md"))
 
 
 class NonGitProject(unittest.TestCase):
