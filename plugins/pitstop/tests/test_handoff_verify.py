@@ -628,7 +628,8 @@ class HandoffStampCheck(unittest.TestCase):
 
 
 class HandoffPrune(unittest.TestCase):
-    """Handoff files must not pile up: stale ones are removed, live ones never are."""
+    """Handoff files must not pile up: stale ones are moved into pruned/, live ones never are.
+    Nothing is deleted; pruned/ is never read or cleaned by pitstop."""
 
     def setUp(self):
         self.repo = Repo()
@@ -648,9 +649,9 @@ class HandoffPrune(unittest.TestCase):
     def exists(self, name):
         return os.path.exists(os.path.join(self.rem, name))
 
-    def test_removes_handoffs_older_than_the_default_thirty_days_and_keeps_newer_ones(self):
-        self.make("remember.md", 31)
-        self.make("remember-old.md", 60)
+    def test_moves_handoffs_older_than_the_default_thirty_days_and_keeps_newer_ones(self):
+        self.make("remember.md", 31, "# Handoff\nSession: s1\nfirst\n")
+        self.make("remember-old.md", 60, "# Handoff\nSession: s2\nsecond\n")
         self.make("remember-recent.md", 29)
         rc, out, err = self.prune()
         self.assertEqual(rc, 0, err)
@@ -658,7 +659,29 @@ class HandoffPrune(unittest.TestCase):
         self.assertFalse(self.exists("remember-old.md"))
         self.assertTrue(self.exists("remember-recent.md"))
         self.assertEqual(len(out), 2)
-        self.assertTrue(all(l.startswith("pruned: ") for l in out), out)
+        self.assertTrue(all(l.startswith("pruned: ") and " -> " in l for l in out), out)
+        with open(os.path.join(self.rem, "pruned", "remember.md")) as fh:
+            self.assertIn("first", fh.read())
+        with open(os.path.join(self.rem, "pruned", "remember-old.md")) as fh:
+            self.assertIn("second", fh.read())
+
+    def test_a_name_already_in_pruned_is_not_overwritten(self):
+        self.make("pruned/remember.md", 5, "# Handoff\nSession: earlier\nearlier text\n")
+        self.make("remember.md", 40, "# Handoff\nSession: later\nlater text\n")
+        rc, out, err = self.prune()
+        self.assertEqual(rc, 0, err)
+        with open(os.path.join(self.rem, "pruned", "remember.md")) as fh:
+            self.assertIn("earlier text", fh.read())
+        with open(os.path.join(self.rem, "pruned", "remember-2.md")) as fh:
+            self.assertIn("later text", fh.read())
+
+    def test_files_already_in_pruned_are_never_moved_again_or_listed(self):
+        self.make("pruned/remember-old.md", 90)
+        rc, out, err = self.prune()
+        self.assertEqual((rc, out), (0, []))
+        self.assertTrue(self.exists("pruned/remember-old.md"))
+        r = subprocess.run([sys.executable, SCRIPT, "--list"], capture_output=True, text=True, cwd=self.repo.root)
+        self.assertEqual(r.stdout, "")
 
     def test_days_sets_the_cutoff(self):
         self.make("remember-a.md", 2)
@@ -678,7 +701,7 @@ class HandoffPrune(unittest.TestCase):
         for name in ("journal.md", "drafts/2026-09-01-reply.md", "remember-notes.txt", "notes.md"):
             self.assertTrue(self.exists(name), name)
 
-    def test_a_remember_dash_file_without_a_session_stamp_is_never_deleted(self):
+    def test_a_remember_dash_file_without_a_session_stamp_is_never_moved(self):
         self.make("remember-notes.md", 90, "my own notes\n")
         self.make("remember-draft.md", 90, "# Handoff\nwritten by hand, no stamp\n")
         rc, out, err = self.prune()
@@ -686,7 +709,7 @@ class HandoffPrune(unittest.TestCase):
         self.assertTrue(self.exists("remember-notes.md"))
         self.assertTrue(self.exists("remember-draft.md"))
 
-    def test_the_configured_handoff_file_is_pruned_even_without_a_stamp(self):
+    def test_the_configured_handoff_file_is_moved_even_without_a_stamp(self):
         self.make("remember.md", 60, "# Handoff\nwritten before handoffs carried a stamp\n")
         rc, out, err = self.prune()
         self.assertFalse(self.exists("remember.md"))
@@ -717,9 +740,10 @@ class HandoffPrune(unittest.TestCase):
         self.make("remember-x.md", 90)
         rc, out, err = self.prune("--config", cfg)
         self.assertFalse(os.path.exists(os.path.join(self.repo.root, "notes", "handoff.md")))
+        self.assertTrue(os.path.exists(os.path.join(self.repo.root, "notes", "pruned", "handoff.md")))
         self.assertTrue(self.exists("remember-x.md"))
 
-    def test_bad_days_or_arguments_exit_2_and_delete_nothing(self):
+    def test_bad_days_or_arguments_exit_2_and_move_nothing(self):
         self.make("remember-a.md", 90)
         for args in (["--days", "0"], ["--days", "x"], ["--days"], ["--bogus", "1"]):
             rc, out, err = self.prune(*args)

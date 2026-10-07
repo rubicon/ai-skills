@@ -44,9 +44,11 @@ Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .rem
                 one line per handoff in the handoff directory:
                 "path | session <id or none> | <N> min"
         handoff-verify.py --prune [--days N] [--config FILE]
-                deletes handoffs older than N days (default 30) and prints "pruned: <path>"
-                for each. Only the handoff file and its stamped remember-*.md siblings; never
-                drafts, the journal, a symlink, or a remember-*.md file with no Session line
+                moves handoffs older than N days (default 30) into pruned/ beside them and
+                prints "pruned: <path> -> <new path>" for each. Nothing is deleted, and pruned/
+                is never read or cleaned. Only the handoff file and its stamped remember-*.md
+                siblings move; never drafts, the journal, a symlink, or a remember-*.md file
+                with no Session line
 Exit:   0 = clean, 1 = findings, 2 = cannot read the handoff or could not verify
 Used by /pitstop:park (after writing the handoff) and /pitstop:sitrep (before
 repeating it).
@@ -237,15 +239,24 @@ def handoffs(cwd, config):
 
 
 def prune(cwd, config, days):
-    """Delete handoff files not touched for `days` days. Symlinks are left alone."""
+    """Move handoff files not touched for `days` days into pruned/ beside them, never overwriting
+    a name already there. Nothing is deleted, and pruned/ is never read or cleaned. Symlinks stay."""
     cutoff = time.time() - days * 86400
-    removed = []
+    moved = []
     for path in handoff_files(cwd, config):
         if os.path.islink(path) or not os.path.isfile(path) or os.path.getmtime(path) >= cutoff:
             continue
-        removed.append((path, int((time.time() - os.path.getmtime(path)) // 86400)))
-        os.unlink(path)
-    return removed
+        old = int((time.time() - os.path.getmtime(path)) // 86400)
+        pruned_dir = os.path.join(os.path.dirname(path), "pruned")
+        os.makedirs(pruned_dir, exist_ok=True)
+        stem, ext = os.path.splitext(os.path.basename(path))
+        dest, n = os.path.join(pruned_dir, stem + ext), 1
+        while os.path.lexists(dest):
+            n += 1
+            dest = os.path.join(pruned_dir, f"{stem}-{n}{ext}")
+        os.rename(path, dest)
+        moved.append((path, dest, old))
+    return moved
 
 
 def main(argv):
@@ -273,8 +284,8 @@ def main(argv):
             for path, owner, age in handoffs(os.getcwd(), config):
                 print(f"{path} | session {owner} | {age} min")
         elif flag == "--prune":
-            for path, old in prune(os.getcwd(), config, days):
-                print(f"pruned: {path} ({old} days old)")
+            for path, dest, old in prune(os.getcwd(), config, days):
+                print(f"pruned: {path} -> {dest} ({old} days old)")
         elif flag == "--claim":
             for key, value in claim_handoff(os.getcwd(), config, opts.get("--session")):
                 print(f"{key}: {value}")

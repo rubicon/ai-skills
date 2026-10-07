@@ -6,7 +6,7 @@ A long Claude Code session ends in a compact or a clear, and both throw context 
 
 ## Commands
 
-- `/pitstop:park`: before a compact or clear. Saves drafts, writes and verifies the handoff, writes the journal entry, and tells you whether to clear or compact. If another session already parked a handoff in this folder, park leaves it in place and writes its own beside it as `remember-<session>.md`, and sitrep reads them all. So handoffs do not pile up, park also deletes any handoff nobody has touched for 30 days, including another session's, and says which it deleted.
+- `/pitstop:park`: before a compact or clear. Saves drafts, writes and verifies the handoff, writes the journal entry, and tells you whether to clear or compact. If another session already parked a handoff in this folder, park leaves it in place and writes its own beside it as `remember-<session>.md`, and sitrep reads them all. So handoffs do not pile up, park also moves any handoff nobody has touched for 30 days, including another session's, into a `pruned/` folder beside it and says which it moved. Nothing is deleted, and pitstop never reads or empties `pruned/`, so clear it when you like.
 - `/pitstop:sitrep`: at the start of a session. Reports what needs you, what is done, and what is outstanding. Read-only.
 - `/pitstop:catch-up`: coming back after time away. Two or three sentences on where the current branch stands and the next real piece of work. Read-only. Use `sitrep` for everything else in flight.
 - `/pitstop:checkpoint`: the journal entry on its own, plus fact updates when Facts is configured.

@@ -85,7 +85,7 @@ Either way:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --root "<root path>" --session "<the session: value>" "<write path>"
 ```
 
-Exit 2 means the handoff could not be read or verified: report the message and stop retrying. On exit 1, fix each finding from a first-hand read: correct it, remove it, or mark the line `(unverified)`. For `STAMP-MISMATCH`, the file lost its `Session:` line or carries another id: put `Session: <the session: value>` back on line 2 and run it again. A handoff without its stamp is invisible to sitrep and to cleanup. For `DRAFT-WITHOUT-FILE`, `MISSING-DRAFT`, `EMPTY-DRAFT`, or `UNLISTED-DRAFT`, go back to step 1. For `DONE-DRAFT-CLAIMED`, the text was sent: stop calling it unsent. Run it again until it exits 0.
+Exit 2 means the handoff could not be read or verified: report the message and stop retrying. On exit 1, fix each finding from a first-hand read: correct it, remove it, or mark the line `(unverified)`. For `STAMP-MISMATCH`, the file lost its `Session:` line or carries another id: put `Session: <the session: value>` back on line 2 and run it again. A sibling handoff (`remember-*.md`) without its stamp is invisible to sitrep and to cleanup. For `DRAFT-WITHOUT-FILE`, `MISSING-DRAFT`, `EMPTY-DRAFT`, or `UNLISTED-DRAFT`, go back to step 1. For `DONE-DRAFT-CLAIMED`, the text was sent: stop calling it unsent. Run it again until it exits 0.
 
 Then remove stale handoffs, so they do not pile up:
 
@@ -93,7 +93,7 @@ Then remove stale handoffs, so they do not pile up:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --prune --config "${CLAUDE_PLUGIN_DATA}/integrations.md"
 ```
 
-It deletes handoff files nobody has touched for 30 days, including another session's, and prints a `pruned:` line for each. It never touches drafts, the journal, the file you just wrote, or a `remember-*.md` file that has no `Session:` line. Do not delete handoff files any other way.
+It moves handoff files nobody has touched for 30 days, including another session's, into a `pruned/` folder beside them, and prints a `pruned:` line for each. Nothing is deleted, and pitstop never reads or empties `pruned/`. It never touches drafts, the journal, the file you just wrote, or a `remember-*.md` file that has no `Session:` line. Do not move or delete handoff files any other way.
 
 ## 4. Journal
 
