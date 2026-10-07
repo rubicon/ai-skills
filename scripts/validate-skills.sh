@@ -9,6 +9,8 @@
 #   - the version field, when present, is full SemVer (MAJOR.MINOR.PATCH)
 #   - each plugins/<name>/ has .claude-plugin/plugin.json, README.md, CHANGELOG.md;
 #     plugin.json parses, has a name, and a SemVer version when present
+#   - each skill bundled at plugins/<name>/skills/<skill>/SKILL.md gets the same
+#     frontmatter checks as skills/ (it needs no README.md or CHANGELOG.md of its own)
 #   - .claude-plugin/marketplace.json, when present, parses and has name, owner.name, plugins[]
 #
 # An empty plugins/ is fine. JSON checks use python3 (present in CI and locally).
@@ -22,33 +24,17 @@ if [ ! -d skills ]; then
   exit 1
 fi
 
-# No flat markdown files directly under skills/ (skills must be directories).
-for f in skills/*.md; do
-  [ -e "$f" ] && err "flat markdown in skills/: $f (skills must be directories)"
-done
-
-found=0
-for dir in skills/*/; do
-  [ -d "$dir" ] || continue
-  found=1
-  name=$(basename "$dir")
-
-  # Directory name is the skill's invocation name; it must be kebab-case.
-  printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$' \
-    || err "$name: skill directory name must be kebab-case (lowercase, digits, single hyphens)"
-
-  for req in SKILL.md README.md CHANGELOG.md; do
-    [ -f "${dir}${req}" ] || err "$name: missing $req"
-  done
-
-  skill="${dir}SKILL.md"
-  [ -f "$skill" ] || continue
+# check_frontmatter <path-to-SKILL.md> <label>
+# Shared by skills/ and by skills bundled inside plugins: the same frontmatter
+# rules apply to both. <label> prefixes every failure message.
+check_frontmatter() {
+  local skill="$1" label="$2" fm
 
   # Extract the YAML frontmatter block (between the first '---' and the next '---').
   fm=$(awk 'NR==1 && $0=="---"{f=1;next} f && $0=="---"{exit} f{print}' "$skill")
   if [ -z "$fm" ]; then
-    err "$name: SKILL.md has no YAML frontmatter"
-    continue
+    err "$label: SKILL.md has no YAML frontmatter"
+    return
   fi
 
   # Parse the frontmatter as real YAML. Checking with grep alone lets malformed
@@ -56,7 +42,7 @@ for dir in skills/*/; do
   # here and then fail wherever the skill is actually loaded.
   # The frontmatter travels in an env var: the heredoc already occupies stdin
   # (it is the Python program), so a pipe here would be discarded.
-  SKILL_FRONTMATTER="$fm" python3 - "$name" <<'PY' || fail=1
+  SKILL_FRONTMATTER="$fm" python3 - "$label" <<'PY' || fail=1
 import os, re, sys
 
 name = sys.argv[1]
@@ -134,6 +120,31 @@ if "version" in data and data["version"] is not None:
 
 sys.exit(0 if ok else 1)
 PY
+}
+
+# No flat markdown files directly under skills/ (skills must be directories).
+for f in skills/*.md; do
+  [ -e "$f" ] && err "flat markdown in skills/: $f (skills must be directories)"
+done
+
+found=0
+for dir in skills/*/; do
+  [ -d "$dir" ] || continue
+  found=1
+  name=$(basename "$dir")
+
+  # Directory name is the skill's invocation name; it must be kebab-case.
+  printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$' \
+    || err "$name: skill directory name must be kebab-case (lowercase, digits, single hyphens)"
+
+  for req in SKILL.md README.md CHANGELOG.md; do
+    [ -f "${dir}${req}" ] || err "$name: missing $req"
+  done
+
+  skill="${dir}SKILL.md"
+  [ -f "$skill" ] || continue
+
+  check_frontmatter "$skill" "$name"
 done
 
 [ "$found" -eq 1 ] || err "no skill directories found under skills/"
@@ -188,6 +199,13 @@ if v is not None and not re.match(r'^[0-9]+\.[0-9]+\.[0-9]+$', str(v)):
     print(f"FAIL: plugin {name}: version '{v}' is not SemVer (MAJOR.MINOR.PATCH)", file=sys.stderr); ok = False
 sys.exit(0 if ok else 1)
 PY
+
+  # Bundled skills: only the frontmatter rules apply. The plugin carries the
+  # README.md and CHANGELOG.md, so a bundled skill needs neither of its own.
+  for skill in "${dir}"skills/*/SKILL.md; do
+    [ -f "$skill" ] || continue
+    check_frontmatter "$skill" "plugin $name: $(basename "$(dirname "$skill")")"
+  done
 done
 
 if [ "$fail" -ne 0 ]; then
