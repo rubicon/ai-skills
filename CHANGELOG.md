@@ -5,6 +5,29 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [1.3.0](https://github.com/rubicon/ai-skills/compare/v1.2.0...v1.3.0) (2026-10-07)
+
+
+### Features
+
+* add anger-translator, a skill that turns a heated draft into a firm, professional message ([#97](https://github.com/rubicon/ai-skills/issues/97)) ([1b40e81](https://github.com/rubicon/ai-skills/commit/1b40e8106ac3f8d6d42d055d9679aa35f9e35d95)), closes [#96](https://github.com/rubicon/ai-skills/issues/96)
+* add goalpost, a skill that writes /goal conditions that are checkable and can finish ([#86](https://github.com/rubicon/ai-skills/issues/86)) ([323db2c](https://github.com/rubicon/ai-skills/commit/323db2ceec6fa966dc282428637c7b0fb962d26b)), closes [#81](https://github.com/rubicon/ai-skills/issues/81)
+* add grand-tour, an onboarding-style tour of a codebase ([#87](https://github.com/rubicon/ai-skills/issues/87)) ([9bc01fa](https://github.com/rubicon/ai-skills/commit/9bc01fa1b19bdf57bd74370fa3c62e95d195f33c)), closes [#83](https://github.com/rubicon/ai-skills/issues/83)
+* add loadout plugin for per-project plugin and skill audits ([#93](https://github.com/rubicon/ai-skills/issues/93)) ([7283d53](https://github.com/rubicon/ai-skills/commit/7283d53cd8ae2e768df80dcf945f8581fbd0d9e9)), closes [#78](https://github.com/rubicon/ai-skills/issues/78)
+* add second-look, an intent-first review by a fresh agent ([#91](https://github.com/rubicon/ai-skills/issues/91)) ([e73995d](https://github.com/rubicon/ai-skills/commit/e73995dff6b15e4d67fbd9ec0b3096fbbd9086cf)), closes [#82](https://github.com/rubicon/ai-skills/issues/82)
+* add showdown, a skill that compares approaches head to head and recommends one ([#85](https://github.com/rubicon/ai-skills/issues/85)) ([90da50c](https://github.com/rubicon/ai-skills/commit/90da50cce70733f72f501c0d9f7530f707cef518)), closes [#80](https://github.com/rubicon/ai-skills/issues/80)
+* **pitstop:** add an optional Facts section so checkpoint keeps a fact store current ([#94](https://github.com/rubicon/ai-skills/issues/94)) ([220ea32](https://github.com/rubicon/ai-skills/commit/220ea32e98ab8cb3cf3d367aa2b7cba683cc480b)), closes [#92](https://github.com/rubicon/ai-skills/issues/92)
+* **pitstop:** add catch-up, a short where-was-I on the current branch ([#84](https://github.com/rubicon/ai-skills/issues/84)) ([d7bb334](https://github.com/rubicon/ai-skills/commit/d7bb3340cefd14793c13be70fdc3559254414fff)), closes [#79](https://github.com/rubicon/ai-skills/issues/79)
+* **pitstop:** add the pitstop plugin (park, sitrep, checkpoint, setup) ([#72](https://github.com/rubicon/ai-skills/issues/72)) ([5e22ff2](https://github.com/rubicon/ai-skills/commit/5e22ff24db83182cdcfb7e61c3f62dd1200a15ed)), closes [#71](https://github.com/rubicon/ai-skills/issues/71)
+* **pitstop:** never overwrite another session's handoff ([#101](https://github.com/rubicon/ai-skills/issues/101)) ([c18375e](https://github.com/rubicon/ai-skills/commit/c18375e61d6690ee28b2649d6c85114acc040704))
+* **salience:** give voice a situational axis and an expiring tell list ([#75](https://github.com/rubicon/ai-skills/issues/75)) ([60d38c5](https://github.com/rubicon/ai-skills/commit/60d38c5a4c286b8d242ba5546ad9f9ab25fa8bc1)), closes [#38](https://github.com/rubicon/ai-skills/issues/38) [#43](https://github.com/rubicon/ai-skills/issues/43) [#48](https://github.com/rubicon/ai-skills/issues/48) [#49](https://github.com/rubicon/ai-skills/issues/49) [#50](https://github.com/rubicon/ai-skills/issues/50) [#51](https://github.com/rubicon/ai-skills/issues/51) [#52](https://github.com/rubicon/ai-skills/issues/52) [#53](https://github.com/rubicon/ai-skills/issues/53) [#69](https://github.com/rubicon/ai-skills/issues/69) [#70](https://github.com/rubicon/ai-skills/issues/70)
+* validate the SKILL.md files bundled inside plugins ([#99](https://github.com/rubicon/ai-skills/issues/99)) ([70dfef5](https://github.com/rubicon/ai-skills/commit/70dfef5ef71ca4f58961f723c2ba81fa98dce1b4)), closes [#90](https://github.com/rubicon/ai-skills/issues/90)
+
+
+### Bug Fixes
+
+* **backup-before-troubleshooting:** point homepage at the GitHub repo ([#98](https://github.com/rubicon/ai-skills/issues/98)) ([caaf32a](https://github.com/rubicon/ai-skills/commit/caaf32aa28ddde20831b8caaf93d1cae0b90466f)), closes [#89](https://github.com/rubicon/ai-skills/issues/89)
+
 ## [1.2.0](https://github.com/rubicon/ai-skills/compare/v1.1.1...v1.2.0) (2026-09-09)
 
 
