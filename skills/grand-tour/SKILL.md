@@ -1,6 +1,6 @@
 ---
 name: grand-tour
-version: 0.1.0  # x-release-please-version
+version: 0.2.0  # x-release-please-version
 description: >-
   Use when the user is new to a codebase, coming back to one after months, or
   asks for a tour, an orientation, "how does this repo fit together", "walk me

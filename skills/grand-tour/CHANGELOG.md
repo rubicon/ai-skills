@@ -4,6 +4,13 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
+## [0.2.0](https://github.com/rubicon/ai-skills/compare/grand-tour-v0.1.0...grand-tour-v0.2.0) (2026-10-09)
+
+
+### Features
+
+* add grand-tour, an onboarding-style tour of a codebase ([#87](https://github.com/rubicon/ai-skills/issues/87)) ([9bc01fa](https://github.com/rubicon/ai-skills/commit/9bc01fa1b19bdf57bd74370fa3c62e95d195f33c)), closes [#83](https://github.com/rubicon/ai-skills/issues/83)
+
 ## [Unreleased]
 
 ## [0.1.0] — 2026-10-04
