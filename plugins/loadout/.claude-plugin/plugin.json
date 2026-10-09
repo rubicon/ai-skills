@@ -1,9 +1,18 @@
 {
   "name": "loadout",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Audit which plugins and skills a project loads, recommend a per-project set, apply it after approval, and verify it from fresh sessions.",
-  "author": { "name": "Dax Davis" },
+  "author": {
+    "name": "Dax Davis"
+  },
   "homepage": "https://github.com/rubicon/ai-skills",
   "license": "MIT",
-  "keywords": ["plugins", "skills", "settings", "enabledPlugins", "skillOverrides", "context"]
+  "keywords": [
+    "plugins",
+    "skills",
+    "settings",
+    "enabledPlugins",
+    "skillOverrides",
+    "context"
+  ]
 }
