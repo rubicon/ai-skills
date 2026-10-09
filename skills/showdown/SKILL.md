@@ -1,6 +1,6 @@
 ---
 name: showdown
-version: 0.1.0  # x-release-please-version
+version: 0.2.0  # x-release-please-version
 description: >-
   Use when the user knows what they want to build or change but not how to
   approach it, and wants the options compared before anyone plans or codes.
