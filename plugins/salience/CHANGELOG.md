@@ -5,6 +5,18 @@ All notable changes to the Salience plugin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/rubicon/ai-skills/compare/salience-v0.5.0...salience-v0.6.0) (2026-10-09)
+
+
+### Features
+
+* add Salience, a unified LinkedIn executive presence plugin ([#29](https://github.com/rubicon/ai-skills/issues/29)) ([57415c0](https://github.com/rubicon/ai-skills/commit/57415c02f721de838ed20e45f1f20271cdfdd518))
+* **salience:** add the worklist and engagement-roster paste path ([#64](https://github.com/rubicon/ai-skills/issues/64)) ([287b75a](https://github.com/rubicon/ai-skills/commit/287b75a0b0df2a29d6a86df3fc4a0f75dbea5171)), closes [#62](https://github.com/rubicon/ai-skills/issues/62)
+* **salience:** close four governance gaps in the approval matrix and third-party rules ([#68](https://github.com/rubicon/ai-skills/issues/68)) ([94c66e9](https://github.com/rubicon/ai-skills/commit/94c66e96a094354651821a5eeadc70bbe156cf7f)), closes [#67](https://github.com/rubicon/ai-skills/issues/67)
+* **salience:** close the advise-vs-execute refusal gap; record the corpus review ledger ([#63](https://github.com/rubicon/ai-skills/issues/63)) ([22601e6](https://github.com/rubicon/ai-skills/commit/22601e65429613557adab3bba8e69cdc312545be)), closes [#61](https://github.com/rubicon/ai-skills/issues/61)
+* **salience:** give voice a situational axis and an expiring tell list ([#75](https://github.com/rubicon/ai-skills/issues/75)) ([60d38c5](https://github.com/rubicon/ai-skills/commit/60d38c5a4c286b8d242ba5546ad9f9ab25fa8bc1)), closes [#38](https://github.com/rubicon/ai-skills/issues/38) [#43](https://github.com/rubicon/ai-skills/issues/43) [#48](https://github.com/rubicon/ai-skills/issues/48) [#49](https://github.com/rubicon/ai-skills/issues/49) [#50](https://github.com/rubicon/ai-skills/issues/50) [#51](https://github.com/rubicon/ai-skills/issues/51) [#52](https://github.com/rubicon/ai-skills/issues/52) [#53](https://github.com/rubicon/ai-skills/issues/53) [#69](https://github.com/rubicon/ai-skills/issues/69) [#70](https://github.com/rubicon/ai-skills/issues/70)
+* **salience:** read declared corpus authority; add fact subject and visibility ([#32](https://github.com/rubicon/ai-skills/issues/32)) ([bf7d6e3](https://github.com/rubicon/ai-skills/commit/bf7d6e31e6b5190885789cc01064595658c3fc19)), closes [#31](https://github.com/rubicon/ai-skills/issues/31)
+
 ## [Unreleased]
 
 ## [0.5.0] - 2026-09-23
