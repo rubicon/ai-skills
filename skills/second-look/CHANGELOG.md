@@ -4,6 +4,13 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
+## [0.2.0](https://github.com/rubicon/ai-skills/compare/second-look-v0.1.0...second-look-v0.2.0) (2026-10-09)
+
+
+### Features
+
+* add second-look, an intent-first review by a fresh agent ([#91](https://github.com/rubicon/ai-skills/issues/91)) ([e73995d](https://github.com/rubicon/ai-skills/commit/e73995dff6b15e4d67fbd9ec0b3096fbbd9086cf)), closes [#82](https://github.com/rubicon/ai-skills/issues/82)
+
 ## [Unreleased]
 
 ## [0.1.0] — 2026-10-04
