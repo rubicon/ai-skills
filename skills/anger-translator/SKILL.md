@@ -1,6 +1,6 @@
 ---
 name: anger-translator
-version: 0.1.0  # x-release-please-version
+version: 0.2.0  # x-release-please-version
 description: >-
   Use when the user has a heated, angry, or frustrated draft (email, Slack,
   text, letter) and wants it sendable at work without losing its force, or asks

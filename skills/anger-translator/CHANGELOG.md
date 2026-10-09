@@ -4,6 +4,13 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
+## [0.2.0](https://github.com/rubicon/ai-skills/compare/anger-translator-v0.1.0...anger-translator-v0.2.0) (2026-10-09)
+
+
+### Features
+
+* add anger-translator, a skill that turns a heated draft into a firm, professional message ([#97](https://github.com/rubicon/ai-skills/issues/97)) ([1b40e81](https://github.com/rubicon/ai-skills/commit/1b40e8106ac3f8d6d42d055d9679aa35f9e35d95)), closes [#96](https://github.com/rubicon/ai-skills/issues/96)
+
 ## [Unreleased]
 
 ## [0.1.0] — 2026-10-07
