@@ -1,6 +1,6 @@
 ---
 name: second-look
-version: 0.1.0
+version: 0.1.0  # x-release-please-version
 description: >-
   Use before opening a pull request or merging work done in the current
   session, when the user asks for a fresh, independent, or second review, "a

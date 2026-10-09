@@ -12,6 +12,8 @@
 #   - each skill bundled at plugins/<name>/skills/<skill>/SKILL.md gets the same
 #     frontmatter checks as skills/ (it needs no README.md or CHANGELOG.md of its own)
 #   - .claude-plugin/marketplace.json, when present, parses and has name, owner.name, plugins[]
+#   - every skills/<name>/ and plugins/<name>/ has an entry in release-please-config.json
+#     (under packages) and in .release-please-manifest.json, so none is left on hand-bumped versions
 #
 # An empty plugins/ is fine. JSON checks use python3 (present in CI and locally).
 # Exits non-zero on any violation. Run locally before opening a PR; also run in CI.
@@ -207,6 +209,34 @@ PY
     check_frontmatter "$skill" "plugin $name: $(basename "$(dirname "$skill")")"
   done
 done
+
+# --- release-please coverage ---
+# A package missing from either file is never bumped and never gets a generated
+# changelog, so it silently falls back to hand-maintained versioning.
+python3 - <<'PY' || fail=1
+import glob, json, os, sys
+
+ok = True
+registered = {}
+for path, packages in (
+    ("release-please-config.json", lambda d: d.get("packages", {})),
+    (".release-please-manifest.json", lambda d: d),
+):
+    try:
+        registered[path] = packages(json.load(open(path)))
+    except Exception as e:
+        print(f"FAIL: {path}: cannot read ({e})", file=sys.stderr)
+        ok = False
+
+for tree in ("skills", "plugins"):
+    for pkg in sorted(p for p in glob.glob(f"{tree}/*") if os.path.isdir(p)):
+        for path, keys in registered.items():
+            if pkg not in keys:
+                print(f"FAIL: {pkg}: no entry in {path} (see 'Adding a Skill' / 'Adding a Plugin' in CLAUDE.md)",
+                      file=sys.stderr)
+                ok = False
+sys.exit(0 if ok else 1)
+PY
 
 if [ "$fail" -ne 0 ]; then
   echo "Skill validation FAILED." >&2

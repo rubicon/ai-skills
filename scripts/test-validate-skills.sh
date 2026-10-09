@@ -51,12 +51,46 @@ description: A well-formed skill.
 version: 1.0.0'
 }
 
-# expect <expected-status: ok|err> <description> <setup-fn>
+# register_packages <root>
+# Writes release-please-config.json and .release-please-manifest.json listing
+# every directory under skills/ and plugins/, as a fully registered repo would
+# have. expect() runs this after each setup so a case only has to say what it
+# breaks; the release-please cases below remove one entry afterwards.
+register_packages() {
+  local root="$1" dir sep_c="" sep_m=""
+  local config='{"packages": {' manifest='{'
+  for dir in "$root"/skills/*/ "$root"/plugins/*/; do
+    [ -d "$dir" ] || continue
+    local key="$(basename "$(dirname "$dir")")/$(basename "$dir")"
+    config="${config}${sep_c}\"${key}\": {}"
+    manifest="${manifest}${sep_m}\"${key}\": \"1.0.0\""
+    sep_c=", "; sep_m=", "
+  done
+  printf '%s}}\n' "$config" > "$root/release-please-config.json"
+  printf '%s}\n' "$manifest" > "$root/.release-please-manifest.json"
+}
+
+# drop_json_key <file> <key> [<parent-key>]
+# Deletes <key> from the top level of <file>, or from <parent-key> inside it.
+drop_json_key() {
+  python3 - "$@" <<'PY'
+import json, sys
+path, key = sys.argv[1], sys.argv[2]
+parent = sys.argv[3] if len(sys.argv) > 3 else None
+data = json.load(open(path))
+del (data[parent] if parent else data)[key]
+json.dump(data, open(path, "w"))
+PY
+}
+
+# expect <expected-status: ok|err> <description> <setup-fn> [<mutate-fn>]
 expect() {
-  local want="$1" desc="$2" setup="$3"
+  local want="$1" desc="$2" setup="$3" mutate="${4:-}"
   local root status
   root=$(mktemp -d)
   "$setup" "$root"
+  register_packages "$root"
+  [ -z "$mutate" ] || "$mutate" "$root"
   ( cd "$root" && bash "$VALIDATOR" >/dev/null 2>&1 )
   status=$?
   rm -rf "$root"
@@ -205,6 +239,23 @@ expect err "rejects a bundled skill with no description"      setup_plugin_skill
 expect err "rejects a bundled skill with a non-SemVer version" setup_plugin_skill_bad_semver
 expect err "rejects a bundled skill with duplicate keys"      setup_plugin_skill_duplicate_keys
 expect err "rejects a bundled skill with no frontmatter"      setup_plugin_skill_no_frontmatter
+
+# Mutations applied after register_packages: each removes one registration.
+drop_skill_config()    { drop_json_key "$1/release-please-config.json" "skills/good-skill" packages; }
+drop_skill_manifest()  { drop_json_key "$1/.release-please-manifest.json" "skills/good-skill"; }
+drop_plugin_config()   { drop_json_key "$1/release-please-config.json" "plugins/good-plugin" packages; }
+drop_plugin_manifest() { drop_json_key "$1/.release-please-manifest.json" "plugins/good-plugin"; }
+remove_config_file()   { rm "$1/release-please-config.json"; }
+remove_manifest_file() { rm "$1/.release-please-manifest.json"; }
+
+echo " every skill and plugin is under release-please:"
+expect ok  "accepts skills and plugins that are all registered" setup_plugin_skill_valid
+expect err "rejects a skill with no release-please config entry"       setup_valid drop_skill_config
+expect err "rejects a skill with no release-please manifest entry"     setup_valid drop_skill_manifest
+expect err "rejects a plugin with no release-please config entry"      setup_plugin_skill_valid drop_plugin_config
+expect err "rejects a plugin with no release-please manifest entry"    setup_plugin_skill_valid drop_plugin_manifest
+expect err "rejects a missing release-please-config.json"              setup_valid remove_config_file
+expect err "rejects a missing .release-please-manifest.json"           setup_valid remove_manifest_file
 
 echo
 echo "passed: $pass  failed: $fail"

@@ -1,6 +1,6 @@
 ---
 name: goalpost
-version: 0.1.0
+version: 0.1.0  # x-release-please-version
 description: >-
   Use when the user wants Claude Code to keep working autonomously with /goal
   and needs the goal condition written, or asks to "turn this into a goal",

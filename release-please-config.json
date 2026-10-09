@@ -29,6 +29,34 @@
       "package-name": "cache-money",
       "extra-files": ["SKILL.md"]
     },
+    "skills/anger-translator": {
+      "package-name": "anger-translator",
+      "extra-files": ["SKILL.md"]
+    },
+    "skills/codebase-memory": {
+      "package-name": "codebase-memory",
+      "extra-files": ["SKILL.md"]
+    },
+    "skills/goalpost": {
+      "package-name": "goalpost",
+      "extra-files": ["SKILL.md"]
+    },
+    "skills/grand-tour": {
+      "package-name": "grand-tour",
+      "extra-files": ["SKILL.md"]
+    },
+    "skills/relocate-session": {
+      "package-name": "relocate-session",
+      "extra-files": ["SKILL.md"]
+    },
+    "skills/second-look": {
+      "package-name": "second-look",
+      "extra-files": ["SKILL.md"]
+    },
+    "skills/showdown": {
+      "package-name": "showdown",
+      "extra-files": ["SKILL.md"]
+    },
     "plugins/backup-before-troubleshooting": {
       "package-name": "backup-before-troubleshooting",
       "extra-files": [
@@ -37,6 +65,24 @@
     },
     "plugins/pitstop": {
       "package-name": "pitstop",
+      "extra-files": [
+        { "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" }
+      ]
+    },
+    "plugins/loadout": {
+      "package-name": "loadout",
+      "extra-files": [
+        { "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" }
+      ]
+    },
+    "plugins/salience": {
+      "package-name": "salience",
+      "extra-files": [
+        { "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" }
+      ]
+    },
+    "plugins/session-messaging": {
+      "package-name": "session-messaging",
       "extra-files": [
         { "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" }
       ]

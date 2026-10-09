@@ -81,15 +81,17 @@ description: >-
 1. Create or reference an issue; note the issue number.
 2. Create branch: `dev/<issue-number>-<short-kebab-description>`
 3. Create `skills/<skill-name>/SKILL.md` with valid YAML frontmatter (`name` + `description` required; `version` in SemVer).
-4. Add `skills/<skill-name>/README.md` (thin stub) and `skills/<skill-name>/CHANGELOG.md` (initial version entry).
-5. Update the skills table in root `README.md` and add a one-line summary to root `CHANGELOG.md`.
-6. Commit with `feat:` prefix; open a PR on GitHub.
+4. Add `skills/<skill-name>/README.md` (thin stub) and `skills/<skill-name>/CHANGELOG.md` (initial version entry, no `## [Unreleased]` section; see Versioning and Changelogs in `docs/process/ai-skills-repo-overlay.md`).
+5. Put the skill under release-please. In `release-please-config.json` add `"skills/<skill-name>": { "package-name": "<skill-name>", "extra-files": ["SKILL.md"] }`; in `.release-please-manifest.json` add `"skills/<skill-name>": "<starting version>"`; and mark the `SKILL.md` version line `version: 0.1.0  # x-release-please-version`. `scripts/validate-skills.sh` fails when either entry is missing.
+6. Update the skills table in root `README.md` and add a one-line summary to root `CHANGELOG.md`.
+7. Commit with `feat:` prefix; open a PR on GitHub.
 
 **Pre-merge checklist:**
 
 - [ ] Skill lives at `skills/<skill-name>/SKILL.md` (directory, not flat file)
 - [ ] YAML frontmatter is valid and includes `name` and `description`; `version` is SemVer (`MAJOR.MINOR.PATCH`)
 - [ ] Skill directory has `README.md` and `CHANGELOG.md`
+- [ ] Skill has a `release-please-config.json` entry, a `.release-please-manifest.json` entry, and the `# x-release-please-version` marker on its `version:` line
 - [ ] Root `README.md` skills table updated; root `CHANGELOG.md` has a one-line summary
 - [ ] No personal data in installed content — `bash scripts/check-no-personal-data.sh` passes
 
@@ -105,10 +107,11 @@ do not transcribe it.
 1. Create or reference an issue; note the issue number.
 2. Create branch: `dev/<issue-number>-<short-kebab-description>`
 3. Create `plugins/<plugin-name>/.claude-plugin/plugin.json` (`name` required; `version` in SemVer when present).
-4. Add `plugins/<plugin-name>/README.md` and `plugins/<plugin-name>/CHANGELOG.md` (Keep a Changelog). Bundled skills/commands/agents/scripts live inside the plugin (self-contained — no `../`).
+4. Add `plugins/<plugin-name>/README.md` and `plugins/<plugin-name>/CHANGELOG.md` (Keep a Changelog; no `## [Unreleased]` section, see Versioning and Changelogs in `docs/process/ai-skills-repo-overlay.md`). Bundled skills/commands/agents/scripts live inside the plugin (self-contained — no `../`).
 5. Append the plugin to `.claude-plugin/marketplace.json`: `{ "name": "<plugin-name>", "source": "./plugins/<plugin-name>" }`.
-6. Add a one-line summary to root `CHANGELOG.md`.
-7. Run `bash scripts/validate-skills.sh`; commit with `feat:` prefix; open a PR on GitHub.
+6. Put the plugin under release-please. In `release-please-config.json` add `"plugins/<plugin-name>": { "package-name": "<plugin-name>", "extra-files": [{ "type": "json", "path": ".claude-plugin/plugin.json", "jsonpath": "$.version" }] }`; in `.release-please-manifest.json` add `"plugins/<plugin-name>": "<starting version>"`. `scripts/validate-skills.sh` fails when either entry is missing.
+7. Add a one-line summary to root `CHANGELOG.md`.
+8. Run `bash scripts/validate-skills.sh`; commit with `feat:` prefix; open a PR on GitHub.
 
 See the Plugin Structure Rule in `docs/process/ai-skills-repo-overlay.md` for the full convention.
 
