@@ -1,6 +1,6 @@
 ---
 name: secret-santa-generator
-version: 4.0.0  # x-release-please-version
+version: 4.0.1  # x-release-please-version
 description: >-
   Generate Secret Santa assignment lists from participant names and optional
   exclusion pairs. Use when the user asks to organize a Secret Santa, assign
