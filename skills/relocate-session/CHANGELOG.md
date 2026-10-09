@@ -4,6 +4,13 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
+## [1.1.0](https://github.com/rubicon/ai-skills/compare/relocate-session-v1.0.0...relocate-session-v1.1.0) (2026-10-09)
+
+
+### Features
+
+* add relocate-session skill ([#66](https://github.com/rubicon/ai-skills/issues/66)) ([1528bfd](https://github.com/rubicon/ai-skills/commit/1528bfd5ccd03795c606200b306155ef2f0a6e21)), closes [#65](https://github.com/rubicon/ai-skills/issues/65)
+
 ## [Unreleased]
 
 ## [1.0.0] — 2026-09-08
