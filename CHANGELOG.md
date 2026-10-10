@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [1.4.0](https://github.com/rubicon/ai-skills/compare/v1.3.0...v1.4.0) (2026-10-10)
+
+
+### Features
+
+* **pitstop:** tell park how far the project moved since its own handoff ([#114](https://github.com/rubicon/ai-skills/issues/114)) ([4b32036](https://github.com/rubicon/ai-skills/commit/4b320365007f81394a9924c68d4481a5442ec46e)), closes [#102](https://github.com/rubicon/ai-skills/issues/102)
+
 ## [1.3.0](https://github.com/rubicon/ai-skills/compare/v1.2.0...v1.3.0) (2026-10-07)
 
 
