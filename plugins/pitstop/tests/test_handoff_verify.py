@@ -580,6 +580,74 @@ class HandoffOwnership(unittest.TestCase):
             self.assertEqual(owners, [f"Session: {SESSION_A}", f"Session: {SESSION_B}"])
 
 
+class ClaimDrift(unittest.TestCase):
+    """A park that replaces its own earlier handoff must be told how far the project has moved
+    since that handoff was written, so it re-derives claims instead of retyping stale ones."""
+
+    def setUp(self):
+        self.repo = Repo()
+        self.addCleanup(self.repo.tmp.cleanup)
+        # The first commit predates every handoff these tests write, so it is never drift.
+        self.repo.write("a.txt", "a\n")
+        self.repo.git("add", "a.txt")
+        when = time.strftime("%Y-%m-%d %H:%M:%S %z", time.localtime(time.time() - 3 * 3600))
+        subprocess.run(GIT + ["commit", "-q", "-m", "first"], cwd=self.repo.root, check=True,
+                       env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+        old = time.time() - 3 * 3600
+        os.utime(os.path.join(self.repo.root, "a.txt"), (old, old))
+        self.handoff = os.path.join(self.repo.root, ".remember", "remember.md")
+
+    def write_own_handoff(self, minutes_ago):
+        self.repo.write(".remember/remember.md", f"# Handoff\nSession: {SESSION_A}\n")
+        then = time.time() - minutes_ago * 60
+        os.utime(self.handoff, (then, then))
+
+    def drift(self, session=SESSION_A):
+        rc, lines, err = run_flag(self.repo.root, "--claim", session)
+        self.assertEqual(rc, 0, err)
+        return dict(l.split(": ", 1) for l in lines)["drift"]
+
+    def test_no_handoff_has_no_drift(self):
+        self.assertEqual(self.drift(), "none")
+
+    def test_own_handoff_with_nothing_changed_since_has_no_drift(self):
+        self.write_own_handoff(minutes_ago=0)
+        self.assertEqual(self.drift(), "none")
+
+    def test_commits_since_the_handoff_are_counted(self):
+        self.write_own_handoff(minutes_ago=120)
+        self.repo.commit("b.txt", "b\n", "later one")
+        self.repo.commit("c.txt", "c\n", "later two")
+        d = self.drift()
+        self.assertIn("2 commits", d)
+        self.assertIn("120 min", d)
+
+    def test_a_file_changed_since_the_handoff_is_counted(self):
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.write("a.txt", "changed\n")
+        self.assertIn("1 file", self.drift())
+
+    def test_files_older_than_the_handoff_are_not_drift(self):
+        self.repo.write("untracked.txt", "x\n")
+        old = time.time() - 7200
+        os.utime(os.path.join(self.repo.root, "untracked.txt"), (old, old))
+        self.write_own_handoff(minutes_ago=60)
+        self.assertEqual(self.drift(), "none")
+
+    def test_another_sessions_handoff_is_not_drift_to_report(self):
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.commit("b.txt", "b\n", "later")
+        self.assertEqual(self.drift(SESSION_B), "none")
+
+    def test_outside_git_drift_is_unknown_not_none(self):
+        repo = Repo(git=False)
+        self.addCleanup(repo.tmp.cleanup)
+        repo.write(".remember/remember.md", f"# Handoff\nSession: {SESSION_A}\n")
+        rc, lines, err = run_flag(repo.root, "--claim", SESSION_A)
+        self.assertEqual(rc, 0, err)
+        self.assertTrue(dict(l.split(": ", 1) for l in lines)["drift"].startswith("unknown"))
+
+
 class HandoffStampCheck(unittest.TestCase):
     """park verifies the file it wrote carries this session's stamp, so a handoff that lost its
     Session line cannot pass and then vanish from sitrep."""
