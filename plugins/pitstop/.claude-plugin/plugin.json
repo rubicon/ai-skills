@@ -1,6 +1,6 @@
 {
   "name": "pitstop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Save what a compact or clear would destroy, then rebuild status after it: unsent drafts to files, a mechanically verified handoff, a journal entry, and a status report checked against git.",
   "author": {
     "name": "Dax Davis"
