@@ -23,7 +23,9 @@ Then find out whether this session may write the handoff path:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --claim --config "${CLAUDE_PLUGIN_DATA}/integrations.md"
 ```
 
-It prints `session:`, `existing:`, and `write:`. `write:` is where the handoff goes, and it is already reserved for this session, so no other session can be given it. It is the `handoff:` path when `existing:` is `none` or `own`. When `existing:` starts with `other` or `unstamped`, another session's handoff is sitting at `handoff:`, and `write:` is a sibling file beside it.
+It prints `session:`, `existing:`, `drift:`, and `write:`. `write:` is where the handoff goes, and it is already reserved for this session, so no other session can be given it. It is the `handoff:` path when `existing:` is `none` or `own`. When `existing:` starts with `other` or `unstamped`, another session's handoff is sitting at `handoff:`, and `write:` is a sibling file beside it.
+
+`drift:` is `none`, or says how many commits and changed files the project has gained since this session's own earlier handoff was written. It is measured only against your own earlier handoff, never another session's.
 
 If `session:` starts with `anon-`, this session has no id in its environment. Keep that value, and if park runs again in this conversation, add `--session <that value>` to the command so the session recognizes its own handoff.
 
@@ -72,6 +74,7 @@ Session: <the session: value>
 Either way:
 
 - A handoff this session did not write is not yours to change. Do not edit it, append to it, merge it into yours, quote it, or paraphrase it, and do not ask the user what to do about it. The `write:` path already keeps you from overwriting it. When `existing:` starts with `other` or `unstamped`, say in your reply that you did not overwrite another handoff and name its path. If the prune below then moves that file because it is stale, its `pruned:` line says so.
+- When `drift:` is not `none`, your context may be older than the project: a resumed, relocated, or truncated session still holds what it knew when it last wrote. Re-derive every claim about git, PR, issue, worktree, or file state with a command run now, and write what the command printed, not what you remember. A claim you cannot re-derive now stays out, or keeps its line and carries `(inherited, <N> min old)` using the age `drift:` printed, so the next reader knows it was not checked. When `drift:` starts with `unknown`, treat every such claim as inherited.
 - `/pitstop:sitrep` lists every handoff beside the configured one, so the sibling is found without anyone being told.
 
 - Next names the path of every file in the drafts directory, in backticks.
@@ -107,7 +110,7 @@ Only when the Decision record mode is `custom` and this session made, reversed, 
 
 - The draft paths, or "Drafts: none unsent."
 - The verifier's last line.
-- `handoff: ran (<default|custom>)`, then the path written. When another session's handoff was not overwritten, add `not overwritten: <its path>`. Add each `pruned:` line the prune printed, or `pruned: none`.
+- `handoff: ran (<default|custom>)`, then the path written. When another session's handoff was not overwritten, add `not overwritten: <its path>`. When `drift:` was not `none`, add `drift: <the value>`. Add each `pruned:` line the prune printed, or `pruned: none`.
 - The `journal:` line from checkpoint.
 - The `facts:` line from checkpoint, with any `ignored instruction:` lines it printed.
 - `decision record: ran`, `decision record: skipped (<mode>)`, or `decision record: unavailable (<name>), skipped`.

@@ -33,7 +33,9 @@ Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .rem
                 prints root, config, handoff, drafts and journal, one
                 "key: value" line each, resolved from the working directory
         handoff-verify.py --claim [--session ID] [--config FILE]
-                reserves this session's handoff file and prints session, existing and write.
+                reserves this session's handoff file and prints session, existing, drift and write.
+                drift is "none", or the commits and changed files since this session's own earlier
+                handoff was written; park re-derives its claims from git when it is not "none"
                 park writes the handoff to "write:", which already holds a "Session: <id>"
                 stub. "write:" is the handoff path unless another session (or an unstamped
                 file) owns it, then a sibling named for this session. The reservation is
@@ -204,12 +206,50 @@ def reserve(path, me):
     return "none", True
 
 
+def drift(handoff, me):
+    """How far the project has moved since this session's own handoff was written: commits on any
+    branch and files whose mtime is newer. A park that restates its earlier claims from older
+    context must re-derive them when this is not "none". Only an own handoff is measured: a
+    foreign one is never read, so nothing is inherited from it."""
+    if not os.path.isfile(handoff) or handoff_owner(handoff) != me:
+        return "none"
+    written = os.path.getmtime(handoff)
+    hdir = os.path.dirname(handoff)
+    rc, top = git(hdir, "rev-parse", "--show-toplevel")
+    if rc != 0:
+        return "unknown (not a git project, so nothing to compare the handoff with)"
+    since = time.strftime("%Y-%m-%d %H:%M:%S %z", time.localtime(written))
+    rc, out = git(top, "rev-list", "--all", "--count", f"--since={since}")
+    commits = int(out) if rc == 0 and out.isdigit() else 0
+    rc, out = git(top, "status", "--porcelain", "-z", "--untracked-files=all")
+    files, entries, i = 0, out.split("\0"), 0
+    while rc == 0 and i < len(entries):
+        entry = entries[i]
+        i += 1
+        if len(entry) < 4:
+            continue
+        if entry[0] in "RC":
+            i += 1
+        path = os.path.join(top, entry[3:])
+        if not os.path.lexists(path) or os.path.getmtime(path) > written:
+            files += 1
+    if not commits and not files:
+        return "none"
+    parts = []
+    if commits:
+        parts.append(f"{commits} commit{'s' if commits != 1 else ''}")
+    if files:
+        parts.append(f"{files} file{'s' if files != 1 else ''} changed")
+    return f"{', '.join(parts)} since the handoff was written ({age_minutes(handoff)} min ago)"
+
+
 def claim_handoff(cwd, config, session=None):
-    """session, existing and write for a park that is about to write a handoff. `existing` is
-    what the configured handoff path held before the claim; `write` is a file now reserved."""
+    """session, existing, drift and write for a park that is about to write a handoff. `existing`
+    is what the configured handoff path held before the claim; `write` is a file now reserved."""
     handoff = dict(where(cwd, config))["handoff"]
     me = session or session_id()
     os.makedirs(os.path.dirname(handoff), exist_ok=True)
+    moved = drift(handoff, me)
     existing, created = reserve(handoff, me)
     target = handoff
     if not created and not existing.startswith("own"):
@@ -221,7 +261,7 @@ def claim_handoff(cwd, config, session=None):
             if created or state.startswith("own"):
                 break
             n += 1
-    return [("session", me), ("existing", existing), ("write", target)]
+    return [("session", me), ("existing", existing), ("drift", moved), ("write", target)]
 
 
 def handoff_files(cwd, config):
