@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [1.4.1](https://github.com/rubicon/ai-skills/compare/v1.4.0...v1.4.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **pitstop:** count only files newer than the handoff as drift ([#118](https://github.com/rubicon/ai-skills/issues/118)) ([e584f93](https://github.com/rubicon/ai-skills/commit/e584f930bfe523af160dca2bf7380433a3a3df0d))
+
 ## [1.4.0](https://github.com/rubicon/ai-skills/compare/v1.3.0...v1.4.0) (2026-10-10)
 
 
