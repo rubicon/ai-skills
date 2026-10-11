@@ -5,6 +5,13 @@ All notable changes to this plugin are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [0.3.1](https://github.com/rubicon/ai-skills/compare/pitstop-v0.3.0...pitstop-v0.3.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **pitstop:** count only files newer than the handoff as drift ([#118](https://github.com/rubicon/ai-skills/issues/118)) ([e584f93](https://github.com/rubicon/ai-skills/commit/e584f930bfe523af160dca2bf7380433a3a3df0d))
+
 ## [0.3.0](https://github.com/rubicon/ai-skills/compare/pitstop-v0.2.0...pitstop-v0.3.0) (2026-10-10)
 
 
