@@ -106,13 +106,13 @@ def read_header(path):
     return None
 
 
-def git(root, *args):
+def git(root, *args, raw=False):
     try:
         r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
                            timeout=GIT_TIMEOUT)
     except FileNotFoundError:
         return 127, ""  # git is optional; without it every repo check is skipped
-    return r.returncode, r.stdout.strip()
+    return r.returncode, r.stdout if raw else r.stdout.strip()
 
 
 def find_path(rel, root, worktrees, is_git):
@@ -221,7 +221,7 @@ def drift(handoff, me):
     since = time.strftime("%Y-%m-%d %H:%M:%S %z", time.localtime(written))
     rc, out = git(top, "rev-list", "--all", "--count", f"--since={since}")
     commits = int(out) if rc == 0 and out.isdigit() else 0
-    rc, out = git(top, "status", "--porcelain", "-z", "--untracked-files=all")
+    rc, out = git(top, "status", "--porcelain", "-z", "--untracked-files=all", raw=True)  # " M x" starts with a space
     files, entries, i = 0, out.split("\0"), 0
     while rc == 0 and i < len(entries):
         entry = entries[i]
