@@ -634,6 +634,34 @@ class ClaimDrift(unittest.TestCase):
         self.write_own_handoff(minutes_ago=60)
         self.assertEqual(self.drift(), "none")
 
+    def age(self, rel, seconds):
+        then = time.time() - seconds
+        os.utime(os.path.join(self.repo.root, rel), (then, then))
+
+    def test_a_tracked_file_modified_before_the_handoff_is_not_drift(self):
+        # git prints an unstaged change as " M <path>"; the leading space is part of the entry.
+        self.repo.write("a.txt", "changed\n")
+        self.age("a.txt", 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.assertEqual(self.drift(), "none")
+
+    def test_only_the_files_newer_than_the_handoff_are_counted(self):
+        self.repo.commit("b.txt", "b\n", "second file")
+        self.repo.write("a.txt", "changed\n")
+        self.repo.write("b.txt", "changed\n")
+        self.age("a.txt", 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.write("b.txt", "changed again\n")
+        d = self.drift()
+        self.assertIn("1 file changed", d)
+        self.assertNotIn("2 files", d)
+
+    def test_a_staged_rename_before_the_handoff_is_not_drift(self):
+        self.repo.git("mv", "a.txt", "renamed.txt")
+        self.age("renamed.txt", 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.assertEqual(self.drift(), "none")
+
     def test_another_sessions_handoff_is_not_drift_to_report(self):
         self.write_own_handoff(minutes_ago=60)
         self.repo.commit("b.txt", "b\n", "later")
