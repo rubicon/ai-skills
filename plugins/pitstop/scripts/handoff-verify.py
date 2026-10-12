@@ -34,10 +34,16 @@ Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .rem
                 "key: value" line each, resolved from the working directory
         handoff-verify.py --claim [--session ID] [--config FILE]
                 reserves this session's handoff file and prints session, existing, drift and write.
-                drift is "none", or the commits and changed files (other than the handoff, journal
-                and drafts) since this session's own earlier handoff was written; park re-derives
-                its claims from git when it is not "none". Limits: a commit made in the handoff's
-                own second counts as earlier than it. Edits to journal.md and to files in drafts/
+                drift is "none", or the commits, ref moves and changed files (other than the
+                handoff, journal and drafts) since this session's own earlier handoff was written;
+                park re-derives its claims from git when it is not "none". "refs moved" covers a
+                merge, switch, reset, push, fetch or pull onto commits older than the handoff, in
+                any worktree of the repo, since a handoff can say what each one has checked out.
+                Limits: a commit made in the handoff's own second counts as earlier than it. Ref
+                moves are dated by the mtimes of git's ref storage, so git gc counts as refs moved,
+                and so does background maintenance prefetch on the reftable backend; on the files
+                backend, a remote-tracking ref that fetch --prune deletes is not seen unless it
+                had been packed. Edits to journal.md and to files in drafts/
                 beside the handoff are skipped whoever makes them, so with handoff_path:
                 docs/remember.md, edits to a tracked docs/journal.md are not counted; deleting the
                 journal or the whole drafts/ directory still counts. A deletion is dated by the
@@ -237,12 +243,54 @@ def changed_at(path):
     return os.lstat(path).st_mtime
 
 
+LOCAL_REF_DIRS = tuple(os.path.join(*d) for d in (("refs", "heads"), ("refs", "tags"),
+                                                    ("logs", "refs", "heads"), ("logs", "refs", "tags")))
+PREFETCH_DIRS = (os.path.join("refs", "prefetch"), os.path.join("logs", "refs", "prefetch"))
+
+
+def ref_storage(common):
+    """What git keeps refs in: every file under HEAD, packed-refs, refs/, logs/ and reftable/, for
+    the main worktree and each linked one. A branch or tag deleted from the files backend leaves
+    no file to date, so the directories under refs/heads and refs/tags and their reflogs are
+    included too. refs/remotes directories are not: under remote.<name>.followRemoteHEAD, whose
+    default is "create", every fetch locks <name>/HEAD there, which re-dates the directory without
+    moving a ref. refs/prefetch, which background maintenance fills, is skipped."""
+    for gitdir in [common] + glob.glob(os.path.join(glob.escape(common), "worktrees", "*")):
+        for name in ("HEAD", "packed-refs", "refs", "logs", "reftable"):
+            root = os.path.join(gitdir, name)
+            if not os.path.isdir(root):
+                yield root
+                continue
+            for d, dirs, files in os.walk(root):
+                rel = os.path.relpath(d, common)
+                dirs[:] = [n for n in dirs if os.path.join(rel, n) not in PREFETCH_DIRS]
+                if any(rel == x or rel.startswith(x + os.sep) for x in LOCAL_REF_DIRS):
+                    yield d
+                yield from (os.path.join(d, n) for n in files)
+
+
+def refs_moved_after(top, written):
+    """Whether git changed where any ref points after `written`, dated by the mtimes of its ref
+    storage. That covers a ref moved onto a commit older than the handoff, which the commit count
+    cannot see, whichever ref backend the repo uses and whether or not it keeps reflogs."""
+    rc, common = git(top, "rev-parse", "--git-common-dir")
+    if rc != 0:
+        return False
+    for path in ref_storage(os.path.join(top, common)):
+        try:
+            if os.lstat(path).st_mtime > written:
+                return True
+        except OSError:
+            continue  # absent, or removed by git while this ran
+    return False
+
+
 def drift(handoff, me, journal, drafts):
     """How far the project has moved since this session's own handoff was written: commits on any
-    branch and files whose mtime is newer. A park that restates its earlier claims from older
-    context must re-derive them when this is not "none". Only an own handoff is measured: a
-    foreign one is never read, so nothing is inherited from it. The handoff, the journal and
-    drafts are skipped, because park writes them itself."""
+    branch, refs moved, and files whose mtime is newer. A park that restates its earlier claims
+    from older context must re-derive them when this is not "none". Only an own handoff is
+    measured: a foreign one is never read, so nothing is inherited from it. The handoff, the
+    journal and drafts are skipped, because park writes them itself."""
     if not os.path.isfile(handoff) or handoff_owner(handoff) != me:
         return "none"
     written = os.path.getmtime(handoff)
@@ -277,11 +325,14 @@ def drift(handoff, me, journal, drafts):
             continue
         if changed_at(os.path.join(top, entry[3:])) > written:
             files += 1
-    if not commits and not files:
+    moved = refs_moved_after(top, written)
+    if not commits and not moved and not files:
         return "none"
     parts = []
     if commits:
         parts.append(f"{commits} commit{'s' if commits != 1 else ''}")
+    if moved:
+        parts.append("refs moved")
     if files:
         parts.append(f"{files} file{'s' if files != 1 else ''} changed")
     return f"{', '.join(parts)} since the handoff was written ({age_minutes(handoff)} min ago)"
