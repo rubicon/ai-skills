@@ -766,6 +766,7 @@ class ClaimDrift(unittest.TestCase):
         config = self.config_with_handoff_path(f"{link}/.remember/remember.md")
         self.write_own_handoff(minutes_ago=60)
         self.repo.write(".remember/journal.md", "## entry\n")
+        self.repo.write(".remember/drafts/reply.md", "text\n")
         self.assertEqual(self.drift(config=config), "none")
 
     def test_the_journal_is_skipped_when_the_handoff_path_differs_only_in_case(self):
@@ -794,6 +795,62 @@ class ClaimDrift(unittest.TestCase):
         self.write_own_handoff(minutes_ago=60)
         os.remove(link)
         os.symlink("new-target.txt", link)
+        self.assertIn("1 file changed", self.drift())
+
+    def ignore_locally(self, pattern):
+        # .git/info/exclude ignores without adding a tracked .gitignore to the status.
+        info = os.path.join(self.repo.root, ".git", "info")
+        os.makedirs(info, exist_ok=True)
+        with open(os.path.join(info, "exclude"), "a") as fh:
+            fh.write(pattern + "\n")
+
+    def lage(self, rel, seconds):
+        then = time.time() - seconds
+        os.utime(os.path.join(self.repo.root, rel), (then, then), follow_symlinks=False)
+
+    def test_a_deletion_is_dated_by_its_closest_surviving_directory_not_the_root(self):
+        self.repo.write("sub/b.txt", "b\n")
+        self.repo.write("sub/keep.txt", "k\n")
+        self.repo.git("add", "sub")
+        self.commit_at(time.time() - 7200, "sub")
+        os.remove(os.path.join(self.repo.root, "sub/b.txt"))
+        self.age("sub/keep.txt", 7200)
+        self.age("sub", 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.ignore_locally("*.log")
+        self.repo.write("later.log", "ignored\n")
+        self.assertEqual(self.drift(), "none")
+
+    def test_an_old_dangling_symlink_is_dated_by_the_link_not_its_directory(self):
+        os.symlink("does-not-exist", os.path.join(self.repo.root, "dangling"))
+        self.lage("dangling", 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.ignore_locally("*.log")
+        self.repo.write("later.log", "ignored\n")
+        self.assertEqual(self.drift(), "none")
+
+    def test_a_new_symlink_to_the_journal_is_not_mistaken_for_the_journal(self):
+        self.repo.write(".remember/journal.md", "## entry\n")
+        self.write_own_handoff(minutes_ago=60)
+        os.symlink(".remember/journal.md", os.path.join(self.repo.root, "journal-link"))
+        self.assertIn("1 file changed", self.drift())
+
+    def test_replacing_the_handoff_file_dates_an_earlier_deletion_beside_it(self):
+        # Write and Edit tools save by writing a new file and renaming it over the old one, which
+        # updates the directory's mtime. A deletion in that directory then counts: a documented limit.
+        self.use_repo(ignore_remember=False)
+        self.repo.write(".remember/notes.md", "n\n")
+        self.repo.git("add", ".remember/notes.md")
+        self.commit_at(time.time() - 7200, "notes")
+        os.remove(os.path.join(self.repo.root, ".remember/notes.md"))
+        self.age(".remember", 7200)
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(self.handoff))
+        with os.fdopen(fd, "w") as fh:
+            fh.write(f"# Handoff\nSession: {SESSION_A}\n")
+        # The rename always follows the write; a second's gap keeps coarse-clock filesystems honest.
+        then = time.time() - 1
+        os.utime(tmp, (then, then))
+        os.replace(tmp, self.handoff)
         self.assertIn("1 file changed", self.drift())
 
 

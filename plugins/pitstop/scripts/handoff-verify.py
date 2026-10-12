@@ -37,12 +37,16 @@ Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .rem
                 drift is "none", or the commits and changed files (other than the handoff, journal
                 and drafts) since this session's own earlier handoff was written; park re-derives
                 its claims from git when it is not "none". Limits: a commit made in the handoff's
-                own second counts as earlier than it. journal.md and drafts/ beside the handoff
-                are skipped whoever writes them, so with handoff_path: docs/remember.md, edits to
-                a tracked docs/journal.md are not counted. A deletion is dated by the mtime of its
-                closest surviving directory, so any later entry there, even a git-ignored one such
-                as .DS_Store or __pycache__, or park creating its journal, counts an earlier
-                deletion again, and a later real deletion there re-counts the earlier ones
+                own second counts as earlier than it. Edits to journal.md and to files in drafts/
+                beside the handoff are skipped whoever makes them, so with handoff_path:
+                docs/remember.md, edits to a tracked docs/journal.md are not counted; deleting the
+                journal or the whole drafts/ directory still counts. A deletion is dated by the
+                mtime of its closest surviving directory, so any later entry added, removed or
+                replaced there counts an earlier deletion again: a git-ignored .DS_Store or
+                __pycache__, a later real deletion, park creating its journal, or park saving the
+                handoff or journal with a tool that writes a new file and renames it over the old
+                one, as Claude Code's Write and Edit do. That last one re-dates every uncommitted
+                deletion in the handoff's directory on each park.
                 park writes the handoff to "write:", which already holds a "Session: <id>"
                 stub. "write:" is the handoff path unless another session (or an unstamped
                 file) owns it, then a sibling named for this session. The reservation is
@@ -226,9 +230,8 @@ def identity(path):
 def changed_at(path):
     """A path's own mtime; for a symlink, the link's and not its target's. A deleted path has none,
     so it takes that of the closest directory still on disk, which the deletion updated: a file
-    removed before the handoff is not drift after it. Any later entry added to or removed from that
-    directory, even a git-ignored one such as .DS_Store or __pycache__, or park creating its
-    journal, dates the earlier deletion again, and a later real deletion there counts it too."""
+    removed before the handoff is not drift after it. What else re-dates that directory is listed
+    under the --claim limits at the top of this file."""
     while not os.path.lexists(path):
         path = os.path.dirname(path)
     return os.lstat(path).st_mtime
