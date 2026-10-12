@@ -57,6 +57,10 @@
       "package-name": "showdown",
       "extra-files": ["SKILL.md"]
     },
+    "skills/right-stuff": {
+      "package-name": "right-stuff",
+      "extra-files": ["SKILL.md"]
+    },
     "plugins/backup-before-troubleshooting": {
       "package-name": "backup-before-troubleshooting",
       "extra-files": [
