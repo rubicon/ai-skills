@@ -25,10 +25,10 @@ skillshare install github.com/rubicon/ai-skills --track
 skillshare install github.com/rubicon/ai-skills -s relocate-session
 
 # Install several (-s accepts a comma-separated list)
-skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory
+skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memoir
 
 # Every skill published here
-skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memory,goalpost,grand-tour,identity-theft,relocate-session,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
+skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memoir,goalpost,grand-tour,identity-theft,relocate-session,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
 ```
 
 ## Skills
@@ -40,7 +40,7 @@ skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,
 | [rubicon-wordpress-version-lab](skills/rubicon-wordpress-version-lab/SKILL.md) | Create and manage isolated Docker-only WordPress version test labs on an SSH-reachable host (e.g. a Synology NAS) via docker compose |
 | [identity-theft](skills/identity-theft/SKILL.md) | Steals fictional identities, not personal data — rewrites your text, Markdown, or HTML in a character's voice (Ron Swanson, Yoda, pirate, and 48 more) while code, links, and facts survive untouched |
 | [cache-money](skills/cache-money/SKILL.md) | Keep Claude Code sessions cheap and sharp — session hygiene, `CLAUDE.md` discipline, native auto-compaction controls, model selection, and context-cost habits |
-| [codebase-memory](skills/codebase-memory/SKILL.md) | Query a codebase knowledge graph via MCP instead of grep — callers, impact radius, architecture, dead code, and tiered evidence standards |
+| [codebase-memoir](skills/codebase-memoir/SKILL.md) | Work well with a `codebase-memory-mcp` knowledge graph — query it before grepping, keep the index healthy, write the repo's ADR from evidence, and check coverage before claiming anything is absent |
 | [relocate-session](skills/relocate-session/SKILL.md) | Move a session or a whole project directory to a new path without silently orphaning auto-memory — carries it across, verifies it, and reports what stays behind |
 | [second-look](skills/second-look/SKILL.md) | An intent-first review by a fresh agent — checks the change against what you finally asked for, including later changes and deferrals, then runs the bug hunt |
 | [grand-tour](skills/grand-tour/SKILL.md) | An onboarding tour of a codebase — what it is, its main parts, one real flow traced through the code, the traps a newcomer hits, and where to start |
