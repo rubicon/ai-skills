@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [1.4.2](https://github.com/rubicon/ai-skills/compare/v1.4.1...v1.4.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* **pitstop:** make park mark user-stated claims, re-read files, and finish when nothing drifted ([#130](https://github.com/rubicon/ai-skills/issues/130)) ([972fd18](https://github.com/rubicon/ai-skills/commit/972fd187de0147583ab0d2f514d3c59c073546a4)), closes [#126](https://github.com/rubicon/ai-skills/issues/126)
+* **pitstop:** scope park's re-derive rule and drop inherited labels when nothing drifted ([#137](https://github.com/rubicon/ai-skills/issues/137)) ([c695165](https://github.com/rubicon/ai-skills/commit/c6951650cbaf44126cc6d80d83b8ee4f57b5ad62)), closes [#134](https://github.com/rubicon/ai-skills/issues/134)
+* **pitstop:** stop drift counting park's own files, same-second commits and earlier deletions ([#129](https://github.com/rubicon/ai-skills/issues/129)) ([41b1599](https://github.com/rubicon/ai-skills/commit/41b1599656423250f55f50b829b2783042cd0dee))
+
 ## [1.4.1](https://github.com/rubicon/ai-skills/compare/v1.4.0...v1.4.1) (2026-10-11)
 
 
