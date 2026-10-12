@@ -4,8 +4,6 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
-## [Unreleased]
-
 ## [0.1.0] — 2026-10-04
 
 ### Added
