@@ -3,7 +3,7 @@
 
 Run:  python3 plugins/pitstop/tests/test_handoff_verify.py
 """
-import contextlib, importlib.util, io, os, subprocess, sys, tempfile, time, unittest
+import contextlib, importlib.util, io, os, shutil, subprocess, sys, tempfile, time, unittest
 
 SCRIPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "handoff-verify.py")
 GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com",
@@ -25,13 +25,16 @@ def run_where(cwd, *extra):
 
 
 class Repo:
-    def __init__(self, git=True):
+    def __init__(self, git=True, ignore_remember=True):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = os.path.realpath(self.tmp.name)
         self.is_git = git
         if git:
             self.git("init", "-q")
-        self.write(".remember/.gitignore", "*\n")
+        if ignore_remember:
+            self.write(".remember/.gitignore", "*\n")
+        else:
+            os.makedirs(os.path.join(self.root, ".remember"))
 
     def git(self, *args):
         return subprocess.run(GIT + list(args), cwd=self.root, check=True,
@@ -585,25 +588,32 @@ class ClaimDrift(unittest.TestCase):
     since that handoff was written, so it re-derives claims instead of retyping stale ones."""
 
     def setUp(self):
-        self.repo = Repo()
+        self.use_repo()
+
+    def use_repo(self, **repo_options):
+        self.repo = Repo(**repo_options)
         self.addCleanup(self.repo.tmp.cleanup)
         # The first commit predates every handoff these tests write, so it is never drift.
         self.repo.write("a.txt", "a\n")
         self.repo.git("add", "a.txt")
-        when = time.strftime("%Y-%m-%d %H:%M:%S %z", time.localtime(time.time() - 3 * 3600))
-        subprocess.run(GIT + ["commit", "-q", "-m", "first"], cwd=self.repo.root, check=True,
-                       env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+        self.commit_at(time.time() - 3 * 3600, "first")
         old = time.time() - 3 * 3600
         os.utime(os.path.join(self.repo.root, "a.txt"), (old, old))
         self.handoff = os.path.join(self.repo.root, ".remember", "remember.md")
 
-    def write_own_handoff(self, minutes_ago):
+    def commit_at(self, epoch, msg):
+        when = f"{int(epoch)} +0000"
+        subprocess.run(GIT + ["commit", "-q", "--allow-empty", "-m", msg], cwd=self.repo.root, check=True,
+                       env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+
+    def write_own_handoff(self, minutes_ago=0, at=None):
         self.repo.write(".remember/remember.md", f"# Handoff\nSession: {SESSION_A}\n")
-        then = time.time() - minutes_ago * 60
+        then = at if at is not None else time.time() - minutes_ago * 60
         os.utime(self.handoff, (then, then))
 
-    def drift(self, session=SESSION_A):
-        rc, lines, err = run_flag(self.repo.root, "--claim", session)
+    def drift(self, session=SESSION_A, config=None):
+        extra = ("--config", config) if config else ()
+        rc, lines, err = run_flag(self.repo.root, "--claim", session, None, *extra)
         self.assertEqual(rc, 0, err)
         return dict(l.split(": ", 1) for l in lines)["drift"]
 
@@ -674,6 +684,117 @@ class ClaimDrift(unittest.TestCase):
         rc, lines, err = run_flag(repo.root, "--claim", SESSION_A)
         self.assertEqual(rc, 0, err)
         self.assertTrue(dict(l.split(": ", 1) for l in lines)["drift"].startswith("unknown"))
+
+    def test_the_journal_written_after_the_handoff_is_not_drift_when_remember_is_not_ignored(self):
+        self.use_repo(ignore_remember=False)
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.write(".remember/journal.md", "## entry\n")
+        self.assertEqual(self.drift(), "none")
+
+    def test_files_park_writes_are_skipped_but_other_changes_count_when_remember_is_not_ignored(self):
+        self.use_repo(ignore_remember=False)
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.write(".remember/journal.md", "## entry\n")
+        self.repo.write(".remember/drafts/reply.md", "text\n")
+        self.repo.write(".remember/drafts/done/sent.md", "text\n")
+        self.repo.write("a.txt", "changed\n")
+        d = self.drift()
+        self.assertIn("1 file changed", d)
+        self.assertNotIn("files", d)
+
+    def test_a_commit_in_the_same_second_as_the_handoff_is_not_drift(self):
+        second = int(time.time()) - 600
+        self.commit_at(second, "just before the handoff")
+        self.write_own_handoff(at=second + 0.5)
+        self.assertEqual(self.drift(), "none")
+
+    def test_a_commit_in_the_second_after_the_handoff_is_counted(self):
+        second = int(time.time()) - 600
+        self.write_own_handoff(at=second + 0.5)
+        self.commit_at(second + 1, "just after the handoff")
+        self.assertIn("1 commit", self.drift())
+
+    def test_a_file_deleted_before_the_handoff_is_not_drift(self):
+        os.remove(os.path.join(self.repo.root, "a.txt"))
+        self.age(".", 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.assertEqual(self.drift(), "none")
+
+    def test_a_file_deleted_after_the_handoff_is_counted(self):
+        # An old directory mtime proves the deletion itself is what dates the missing file.
+        self.age(".", 7200)
+        self.write_own_handoff(minutes_ago=60)
+        os.remove(os.path.join(self.repo.root, "a.txt"))
+        self.assertIn("1 file changed", self.drift())
+
+    def test_a_directory_removed_after_the_handoff_counts_its_tracked_files(self):
+        self.repo.write("sub/b.txt", "b\n")
+        self.repo.git("add", "sub/b.txt")
+        self.commit_at(time.time() - 7200, "second file")
+        self.age("sub/b.txt", 7200)
+        self.age("sub", 7200)
+        self.age(".", 7200)
+        self.write_own_handoff(minutes_ago=60)
+        shutil.rmtree(os.path.join(self.repo.root, "sub"))
+        self.assertIn("1 file changed", self.drift())
+
+    def test_a_directory_removed_before_the_handoff_is_not_drift(self):
+        self.repo.write("sub/b.txt", "b\n")
+        self.repo.git("add", "sub/b.txt")
+        self.commit_at(time.time() - 7200, "second file")
+        shutil.rmtree(os.path.join(self.repo.root, "sub"))
+        self.age(".", 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.assertEqual(self.drift(), "none")
+
+    def outside_dir(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        return os.path.realpath(tmp.name)
+
+    def config_with_handoff_path(self, handoff_path):
+        # Outside the repo, so the config file is never a status entry itself.
+        config = os.path.join(self.outside_dir(), "integrations.md")
+        with open(config, "w") as fh:
+            fh.write(f"---\nhandoff_path: {handoff_path}\n---\n")
+        return config
+
+    def test_the_journal_is_skipped_when_the_handoff_path_is_spelled_through_a_symlink(self):
+        self.use_repo(ignore_remember=False)
+        link = os.path.join(self.outside_dir(), "via-link")
+        os.symlink(self.repo.root, link)
+        config = self.config_with_handoff_path(f"{link}/.remember/remember.md")
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.write(".remember/journal.md", "## entry\n")
+        self.assertEqual(self.drift(config=config), "none")
+
+    def test_the_journal_is_skipped_when_the_handoff_path_differs_only_in_case(self):
+        self.use_repo(ignore_remember=False)
+        if not os.path.exists(os.path.join(self.repo.root, ".REMEMBER")):
+            self.skipTest("the filesystem is case-sensitive, so .Remember is another directory")
+        config = self.config_with_handoff_path(".Remember/remember.md")
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.write(".remember/journal.md", "## entry\n")
+        self.repo.write(".remember/drafts/reply.md", "text\n")
+        self.assertEqual(self.drift(config=config), "none")
+
+    def test_a_dangling_symlink_created_after_the_handoff_is_counted(self):
+        self.write_own_handoff(minutes_ago=60)
+        os.symlink("does-not-exist", os.path.join(self.repo.root, "dangling"))
+        self.assertIn("1 file changed", self.drift())
+
+    def test_a_tracked_symlink_retargeted_after_the_handoff_is_counted(self):
+        for rel in ("old-target.txt", "new-target.txt"):
+            self.repo.write(rel, "t\n")
+            self.age(rel, 7200)
+        link = os.path.join(self.repo.root, "link")
+        os.symlink("old-target.txt", link)
+        self.repo.git("add", ".")
+        self.commit_at(time.time() - 7200, "link")
+        self.write_own_handoff(minutes_ago=60)
+        os.remove(link)
+        os.symlink("new-target.txt", link)
+        self.assertIn("1 file changed", self.drift())
 
 
 class HandoffStampCheck(unittest.TestCase):
