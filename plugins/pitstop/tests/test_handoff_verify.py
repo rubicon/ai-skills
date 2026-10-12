@@ -891,9 +891,9 @@ class ClaimDrift(unittest.TestCase):
         self.age_refs(time.time() - 7200)
         return bare
 
-    def linked_worktree(self):
-        path = os.path.join(self.outside_dir(), "linked")
-        self.repo.git("worktree", "add", "-q", "-b", "linked", path, "main")
+    def linked_worktree(self, name="linked"):
+        path = os.path.join(self.outside_dir(), name)
+        self.repo.git("worktree", "add", "-q", "-b", name, path, "main")
         self.age_refs(time.time() - 7200)
         return path
 
@@ -987,6 +987,20 @@ class ClaimDrift(unittest.TestCase):
         self.repo.git("fetch", "-q", "--prune", "origin")
         self.assertIn("refs moved", self.drift())
 
+    def test_a_commit_later_in_the_handoffs_own_second_shows_as_refs_moved(self):
+        second = int(time.time()) - 600
+        self.write_own_handoff(at=second + 0.5)
+        self.commit_at(second, "same second, after the handoff")
+        self.age_refs(second + 0.7)
+        d = self.drift()
+        self.assertIn("refs moved", d)
+        self.assertNotIn("commit", d)
+
+    def test_adding_a_linked_worktree_is_counted(self):
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("worktree", "add", "-q", "-b", "added", os.path.join(self.outside_dir(), "added"))
+        self.assertIn("refs moved", self.drift())
+
     def test_ref_storage_written_at_the_handoffs_own_instant_is_not_drift(self):
         self.branch_ahead()
         then = time.time() - 3600
@@ -1001,9 +1015,8 @@ class ClaimDrift(unittest.TestCase):
         self.repo.git("tag", "-d", "v1")
         self.assertIn("refs moved", self.drift())
 
-    def test_a_remote_branch_pruned_by_fetch_is_not_seen(self):
-        # A documented limit: refs/remotes directories are not dated, since every fetch re-dates
-        # them, so a loose remote-tracking ref deleted on the files backend leaves nothing that is.
+    def prune_side_after_the_handoff(self):
+        """origin/side, a loose remote-tracking ref, deleted by fetch --prune after the handoff."""
         bare = self.origin()
         self.branch_ahead()
         self.repo.git("push", "-q", "origin", "dev/7:side")
@@ -1011,6 +1024,58 @@ class ClaimDrift(unittest.TestCase):
         self.age_refs(time.time() - 7200)
         self.write_own_handoff(minutes_ago=60)
         self.repo.git("fetch", "-q", "--prune", "origin")
+
+    def test_a_remote_branch_pruned_by_fetch_is_counted(self):
+        self.prune_side_after_the_handoff()
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_loose_remote_branch_pruned_with_reflogs_turned_off_is_not_seen(self):
+        # A documented limit: refs/remotes directories are not dated, because a fetch can re-date
+        # them without moving a ref, so with no reflog directory to date the deletion leaves nothing.
+        self.turn_reflogs_off()
+        self.prune_side_after_the_handoff()
+        self.assertEqual(self.drift(), "none")
+
+    def test_deleting_a_remote_tracking_branch_is_counted(self):
+        self.origin()
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("branch", "-q", "-dr", "origin/main")
+        self.assertIn("refs moved", self.drift())
+
+    def test_removing_a_remote_is_counted(self):
+        self.origin()
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("remote", "remove", "origin")
+        self.assertIn("refs moved", self.drift())
+
+    def test_dropping_the_last_stash_is_counted(self):
+        self.repo.write("a.txt", "stashed\n")
+        self.repo.git("stash", "-q")
+        self.age("a.txt", 7200)
+        self.age_refs(time.time() - 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("stash", "drop", "-q")
+        self.assertIn("refs moved", self.drift())
+
+    def test_deleting_a_ref_in_a_custom_namespace_is_counted(self):
+        self.repo.git("update-ref", "refs/custom/x", "HEAD")
+        self.age_refs(time.time() - 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("update-ref", "-d", "refs/custom/x")
+        self.assertIn("refs moved", self.drift())
+
+    def test_removing_a_linked_worktree_while_another_remains_is_counted(self):
+        self.linked_worktree("one")
+        other = self.linked_worktree("two")
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("worktree", "remove", other)
+        self.assertIn("refs moved", self.drift())
+
+    def test_removing_the_last_linked_worktree_is_not_seen(self):
+        # A documented limit: git deletes .git/worktrees/ with the last one, leaving nothing to date.
+        linked = self.linked_worktree()
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("worktree", "remove", linked)
         self.assertEqual(self.drift(), "none")
 
     def test_a_ref_move_is_counted_with_reflogs_turned_off(self):
@@ -1097,15 +1162,10 @@ class ClaimDriftReftable(ClaimDrift):
         self.repo.git("maintenance", "run", "--task=prefetch")
         self.assertIn("refs moved", self.drift())
 
-    def test_a_remote_branch_pruned_by_fetch_is_not_seen(self):
+    def test_a_loose_remote_branch_pruned_with_reflogs_turned_off_is_not_seen(self):
         # Every deletion writes a new table, so the files-backend limit does not apply here.
-        bare = self.origin()
-        self.branch_ahead()
-        self.repo.git("push", "-q", "origin", "dev/7:side")
-        subprocess.run(GIT + ["update-ref", "-d", "refs/heads/side"], cwd=bare, check=True)
-        self.age_refs(time.time() - 7200)
-        self.write_own_handoff(minutes_ago=60)
-        self.repo.git("fetch", "-q", "--prune", "origin")
+        self.turn_reflogs_off()
+        self.prune_side_after_the_handoff()
         self.assertIn("refs moved", self.drift())
 
 
