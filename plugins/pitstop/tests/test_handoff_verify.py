@@ -6,8 +6,10 @@ Run:  python3 plugins/pitstop/tests/test_handoff_verify.py
 import contextlib, importlib.util, io, os, shutil, subprocess, sys, tempfile, time, unittest
 
 SCRIPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "handoff-verify.py")
+# init.defaultRefFormat=files keeps a reftable default in the tester's own config out of the tests;
+# the reftable runs ask for it explicitly.
 GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com",
-       "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"]
+       "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", "-c", "init.defaultRefFormat=files"]
 
 # Invented examples in the shape of a real handoff.
 DEFECT_DRAFT_LINE = ("4. Two replies are drafted and unposted: issue 812 comment `9051177320`, "
@@ -944,6 +946,54 @@ class ClaimDrift(unittest.TestCase):
         self.repo.git("branch", "-q", "-D", "dev/7")
         self.assertIn("refs moved", self.drift())
 
+    def test_deleting_a_branch_beside_another_in_its_directory_is_counted(self):
+        # refs/heads/dev/ survives, so only that nested directory records the deletion.
+        self.branch_ahead()
+        self.repo.git("branch", "dev/8")
+        self.age_refs(time.time() - 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("branch", "-q", "-D", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def turn_reflogs_off(self):
+        self.repo.git("config", "core.logAllRefUpdates", "false")
+        shutil.rmtree(os.path.join(self.repo.root, ".git", "logs"), ignore_errors=True)  # reftable has none
+
+    def test_deleting_a_branch_is_counted_with_reflogs_turned_off(self):
+        self.turn_reflogs_off()
+        self.branch_ahead()
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("branch", "-q", "-D", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_switch_is_counted_with_reflogs_turned_off(self):
+        # Only HEAD is rewritten.
+        self.turn_reflogs_off()
+        self.branch_ahead()
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("switch", "-q", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_packed_remote_branch_pruned_with_reflogs_turned_off_is_counted(self):
+        # Only packed-refs is rewritten.
+        bare = self.origin()
+        self.turn_reflogs_off()
+        self.branch_ahead()
+        self.repo.git("push", "-q", "origin", "dev/7:side")
+        self.repo.git("pack-refs", "--all")
+        subprocess.run(GIT + ["update-ref", "-d", "refs/heads/side"], cwd=bare, check=True)
+        self.age_refs(time.time() - 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("fetch", "-q", "--prune", "origin")
+        self.assertIn("refs moved", self.drift())
+
+    def test_ref_storage_written_at_the_handoffs_own_instant_is_not_drift(self):
+        self.branch_ahead()
+        then = time.time() - 3600
+        self.age_refs(then)
+        self.write_own_handoff(at=then)
+        self.assertEqual(self.drift(), "none")
+
     def test_deleting_a_tag_is_counted(self):
         self.repo.git("tag", "v1")
         self.age_refs(time.time() - 7200)
@@ -964,8 +1014,7 @@ class ClaimDrift(unittest.TestCase):
         self.assertEqual(self.drift(), "none")
 
     def test_a_ref_move_is_counted_with_reflogs_turned_off(self):
-        self.repo.git("config", "core.logAllRefUpdates", "false")
-        shutil.rmtree(os.path.join(self.repo.root, ".git", "logs"))
+        self.turn_reflogs_off()
         self.branch_ahead()
         self.write_own_handoff(minutes_ago=60)
         self.repo.git("merge", "-q", "--ff-only", "dev/7")
@@ -1024,6 +1073,39 @@ class ClaimDrift(unittest.TestCase):
         self.branch_ahead()
         self.write_own_handoff(minutes_ago=60)
         self.repo.git("gc", "-q")
+        self.assertIn("refs moved", self.drift())
+
+
+class ClaimDriftReftable(ClaimDrift):
+    """Every ClaimDrift case again on the reftable backend, which keeps refs in a table stack
+    instead of files."""
+
+    def use_repo(self, **repo_options):
+        repo_options.setdefault("ref_format", "reftable")
+        try:
+            super().use_repo(**repo_options)
+        except subprocess.CalledProcessError:
+            self.skipTest("this git has no reftable backend")
+
+    def test_a_maintenance_prefetch_is_not_drift(self):
+        # A documented limit: refs/prefetch lives in the same table stack, so prefetch counts here.
+        self.origin()
+        self.repo.git("push", "-q", "origin", "main:side")
+        self.repo.git("update-ref", "-d", "refs/remotes/origin/side")  # as if another clone pushed it
+        self.age_refs(time.time() - 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("maintenance", "run", "--task=prefetch")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_remote_branch_pruned_by_fetch_is_not_seen(self):
+        # Every deletion writes a new table, so the files-backend limit does not apply here.
+        bare = self.origin()
+        self.branch_ahead()
+        self.repo.git("push", "-q", "origin", "dev/7:side")
+        subprocess.run(GIT + ["update-ref", "-d", "refs/heads/side"], cwd=bare, check=True)
+        self.age_refs(time.time() - 7200)
+        self.write_own_handoff(minutes_ago=60)
+        self.repo.git("fetch", "-q", "--prune", "origin")
         self.assertIn("refs moved", self.drift())
 
 
