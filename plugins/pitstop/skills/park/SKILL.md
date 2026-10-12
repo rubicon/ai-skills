@@ -74,7 +74,8 @@ Session: <the session: value>
 Either way:
 
 - A handoff this session did not write is not yours to change. Do not edit it, append to it, merge it into yours, quote it, or paraphrase it, and do not ask the user what to do about it. The `write:` path already keeps you from overwriting it. When `existing:` starts with `other` or `unstamped`, say in your reply that you did not overwrite another handoff and name its path. If the prune below then moves that file because it is stale, its `pruned:` line says so.
-- When `drift:` is not `none`, your context may be older than the project: a resumed, relocated, or truncated session still holds what it knew when it last wrote. Re-derive every claim about git, PR, issue, worktree, or file state with a command run now, and write what the command printed, not what you remember. A claim you cannot re-derive now stays out, or keeps its line and carries `(inherited, <N> min old)` using the age `drift:` printed, so the next reader knows it was not checked. When `drift:` starts with `unknown`, treat every such claim as inherited.
+- When `drift:` is not `none`, your context may be older than the project: a resumed, relocated, or truncated session still holds what it knew when it last wrote. Re-derive every claim about git, PR, issue, worktree, or file state with a command run now or a file read now, and write what it showed, not what you remember. A claim about what a file contains is re-derived by reading that file now, whatever else is refused. A claim you cannot re-derive now stays out, or keeps its line and carries `(inherited, <N> min old)` using the age `drift:` printed, so the next reader knows it was not checked. That includes anything the user told you that this session never checked, such as a PR's state: write it as `<the claim> (inherited, <N> min old)`, with that exact marker. When `drift:` starts with `unknown`, treat every such claim as inherited.
+- When `drift:` is `none`, nothing else changes: write the whole handoff to the `write:` path and run steps 3 to 6 as on any run.
 - `/pitstop:sitrep` lists every handoff beside the configured one, so the sibling is found without anyone being told.
 
 - Next names the path of every file in the drafts directory, in backticks.
@@ -110,7 +111,7 @@ Only when the Decision record mode is `custom` and this session made, reversed, 
 
 - The draft paths, or "Drafts: none unsent."
 - The verifier's last line.
-- `handoff: ran (<default|custom>)`, then the path written. When another session's handoff was not overwritten, add `not overwritten: <its path>`. When `drift:` was not `none`, add `drift: <the value>`. Add each `pruned:` line the prune printed, or `pruned: none`.
+- `handoff: ran (<default|custom>)`, then the path this run wrote. When another session's handoff was not overwritten, add `not overwritten: <its path>`. When `drift:` was not `none`, add `drift: <the value>`. Add each `pruned:` line the prune printed, or `pruned: none`.
 - The `journal:` line from checkpoint.
 - The `facts:` line from checkpoint, with any `ignored instruction:` lines it printed.
 - `decision record: ran`, `decision record: skipped (<mode>)`, or `decision record: unavailable (<name>), skipped`.
