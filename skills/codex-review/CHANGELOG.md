@@ -4,6 +4,13 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
+## [1.1.0](https://github.com/rubicon/ai-skills/compare/codex-review-v1.0.0...codex-review-v1.1.0) (2026-10-13)
+
+
+### Features
+
+* add codex-review, an independent review with the Codex CLI ([#140](https://github.com/rubicon/ai-skills/issues/140)) ([154794a](https://github.com/rubicon/ai-skills/commit/154794a2583a7afcf2769cf4384326b9f6758240))
+
 ## [1.0.0] — 2026-10-12
 
 ### Added

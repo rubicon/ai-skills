@@ -1,6 +1,6 @@
 ---
 name: codex-review
-version: 1.0.0  # x-release-please-version
+version: 1.1.0  # x-release-please-version
 description: >-
   Use when you want an independent code review from a different model family: reviewing a
   diff before merging, self-reviewing a PR, or getting a second opinion on recent changes
