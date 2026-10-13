@@ -29,7 +29,7 @@ often and querying never.
 | Text in files the index skips or never saw (ignored, unsupported, or oversized files) | filesystem grep (`search_code` sees indexed files only) | `search_code` |
 | "What is this repo?" orientation | `get_architecture` | reading README + poking around |
 | Impact of a change already made (committed on this branch, uncommitted, or untracked) | `detect_changes` | manual tracing |
-| Impact of a change you are planning | `trace_path` (direction inbound, widened as in the dead-code check below; for a base or interface method also add `OVERRIDE` to `edge_types`, which reaches its implementations) | `detect_changes` |
+| Impact of a change you are planning | `trace_path` (direction inbound, widened as in the dead-code check below; for a base or interface method also add `OVERRIDE` to `edge_types`, which reaches the methods that directly override or implement it) | `detect_changes` |
 | Complex multi-hop or aggregate questions | `query_graph` (Cypher) | many small searches |
 
 `search_graph` search modes, and how they combine:
@@ -51,14 +51,14 @@ simply use a different word than the one in the request.
 
 **Only some projects are watched.** The server refreshes in the background a project that is a
 live session's working directory, and only while `auto_watch` is on (the default). The session
-must also use the full tool profile (the default; a server started with
-`--tool-profile=analysis` or `scout` is not watched) and must not be a hook invocation. From
-v0.11.0 the `watcher_enabled` setting (on by default) is a master switch: with it off no
-watcher runs. Do not full-reindex such a project for ordinary code changes. Any other indexed
-project (a cross-repo target, a project indexed under a `name` override, a repo no open session
-is in) is not refreshed: run `index_repository` on it after its code changes, for example after
-pulling new commits. If any of these conditions fails (for example `auto_watch` or
-`watcher_enabled` is off), treat every project this way.
+must also use the full tool profile (the default; a server started with `--tool-profile=analysis`
+or `scout` is not watched) and must not be a hook invocation. From v0.11.0 the `watcher_enabled`
+setting (on by default, read when the daemon starts) is a master switch: with it off no watcher
+runs. Do not full-reindex such a project for ordinary code changes. Any other indexed project (a
+cross-repo target, a project indexed under a `name` override, a repo no open session is in) is not
+refreshed: run `index_repository` on it after its code changes, for example after pulling new
+commits. If any of these conditions fails (for example `auto_watch` or `watcher_enabled` is off),
+treat every project this way.
 
 `index_status` reports project health (counts, status, coverage). Through v0.10.8 it has no
 freshness; v0.11.0 adds a project-level `indexed_at`. For freshness on specific files, call
@@ -70,7 +70,9 @@ or after a codebase-memory upgrade that adds extraction features.
 `detect_changes` does not update the graph: it is a read-only analysis that maps a git diff
 to the changed symbols and their impact (two hops by default). The diff covers commits on the
 current branch since it left `base_branch` (default `main`), or since the ref passed as
-`since`, plus uncommitted and untracked changes. On `main` itself, commits already on `main`
+`since`, plus uncommitted and untracked changes. Pass `base_branch` when the trunk branch is not
+`main`: through v0.10.8 a base ref that does not exist silently leaves only the uncommitted and
+untracked changes, and v0.11.0 returns an error. On `main` itself, commits already on `main`
 show nothing unless you pass an earlier `since`. It only sees changes already made, so confirm
 the index is fresh before trusting it.
 
@@ -189,10 +191,11 @@ that point away from them, not toward them:
   `edge_types=["HANDLES"]`.
 - **Interface or override implementations** have an outbound `OVERRIDE` edge to the base
   method, and callers go through the base method. Check outbound with `edge_types=["OVERRIDE"]`,
-  then trace the base method's callers. The edge exists only when the base type is itself in
-  the graph, so a method that overrides or implements a type defined outside the repo (a
-  framework base class, a standard-library interface) has no `OVERRIDE` edge even though it is
-  live. For those, read the source for an external base class or interface.
+  then trace the base method's callers. The edge exists only when the direct base type is
+  in the graph and itself declares the method, so a method that overrides a grandparent's
+  method, or implements a type defined outside the repo (a framework base class, a
+  standard-library interface), has no `OVERRIDE` edge even though it is live. For those, read
+  the source for an external base class or interface.
 
 Entry points are flagged by an `is_entry_point` property on the node, not by an edge. The
 indexer sets it only on exported JavaScript and TypeScript functions (v0.11.0 also ArkTS) and
@@ -207,7 +210,9 @@ per-language rules). `search_graph`'s
 Pass the `qualified_name` from `search_graph` as `trace_path`'s `function_name` for every probe
 above. A bare name can match several nodes; `trace_path` then either returns a list of
 suggestions instead of a trace, or merges the traversals of every node with that name, so the
-probe can pass on another symbol's callers.
+probe can pass on another symbol's callers. A qualified name resolves exactly one node, so a
+declaration stub (for example a TypeScript `.d.ts`) is a separate node that can hold some of
+the callers: trace it as well.
 
 Treat a function as dead only when none of these links exist and its source shows no dynamic
 use such as reflection or string dispatch.
@@ -220,8 +225,9 @@ use such as reflection or string dispatch.
 - **`file_path` is project-relative**, not absolute. A `CONTAINS` filter on a path fragment
   won't catch directories that live outside the repo root.
 - **`query_graph` has a hard 100k-row ceiling** through v0.11.0: a result that reaches it fails
-  with an error, so add `LIMIT` to broad Cypher. Through v0.10.8 `max_rows` is an optional
-  limit on the rows returned, with no paging. From v0.11.0 it sets the page size (200 rows by
+  with an error, so add `LIMIT` to broad Cypher. Through v0.10.8 `max_rows` stops the result
+  before `ORDER BY`, `DISTINCT` or `SKIP` are applied, so use `LIMIT`, not `max_rows`, for a
+  top-N, and there is no paging. From v0.11.0 it sets the page size (200 rows by
   default) and `next_cursor` continues, but paging does not lift the ceiling.
 - **`search_graph` in/out degrees are not caller/callee counts** — they are selected-edge
   degree across CALLS, USAGE, CALL_REFERENCE, INHERITS, IMPLEMENTS. Use `trace_path` for
