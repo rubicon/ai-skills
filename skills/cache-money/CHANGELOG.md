@@ -11,8 +11,6 @@ The version tracks the `version:` field in `SKILL.md`.
 
 * restore canonical contents overwritten by mirror snapshot, port cache-money ([#7](https://github.com/rubicon/ai-skills/issues/7)) ([4c32275](https://github.com/rubicon/ai-skills/commit/4c32275c02459353e56f7ee365e7f1f166284b97)), closes [#6](https://github.com/rubicon/ai-skills/issues/6)
 
-## [Unreleased]
-
 ## [1.1.0] — 2026-08-05
 ### Added
 - Native `/autocompact [auto|<tokens>]` command (Claude Code v2.1.221+), `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` as ways to move auto-compaction earlier without watching `/context` manually

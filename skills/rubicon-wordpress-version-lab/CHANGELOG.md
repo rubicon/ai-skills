@@ -11,8 +11,6 @@ The version tracks the `version:` field in `SKILL.md`.
 
 * restore canonical contents overwritten by mirror snapshot, port cache-money ([#7](https://github.com/rubicon/ai-skills/issues/7)) ([4c32275](https://github.com/rubicon/ai-skills/commit/4c32275c02459353e56f7ee365e7f1f166284b97)), closes [#6](https://github.com/rubicon/ai-skills/issues/6)
 
-## [Unreleased]
-
 ## [1.0.0] — 2026-06-20
 - Initial release: create, list, stop, remove, and configure Docker-only WordPress version labs on an SSH-reachable host via `docker compose`. Verified end-to-end on a Synology NAS (DSM 7).
 - Public, config-driven design: connection/identity values live in a local `~/.config/rubicon-wp-lab/config.env` (mode 600) managed by `config_wp_lab.sh`; no personal infrastructure is committed.
