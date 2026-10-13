@@ -6,8 +6,10 @@ Run:  python3 plugins/pitstop/tests/test_handoff_verify.py
 import contextlib, importlib.util, io, os, shutil, subprocess, sys, tempfile, time, unittest
 
 SCRIPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "handoff-verify.py")
+# init.defaultRefFormat=files keeps a reftable default in the tester's own config out of the tests;
+# the reftable runs ask for it explicitly.
 GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com",
-       "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"]
+       "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", "-c", "init.defaultRefFormat=files"]
 
 # Invented examples in the shape of a real handoff.
 DEFECT_DRAFT_LINE = ("4. Two replies are drafted and unposted: issue 812 comment `9051177320`, "
@@ -25,12 +27,14 @@ def run_where(cwd, *extra):
 
 
 class Repo:
-    def __init__(self, git=True, ignore_remember=True):
-        self.tmp = tempfile.TemporaryDirectory()
+    def __init__(self, git=True, ignore_remember=True, ref_format=None, suffix="", logs_off=False):
+        self.tmp = tempfile.TemporaryDirectory(suffix=suffix)
         self.root = os.path.realpath(self.tmp.name)
         self.is_git = git
         if git:
-            self.git("init", "-q")
+            self.git("init", "-q", *(["--ref-format", ref_format] if ref_format else []))
+            if logs_off:
+                self.git("config", "core.logAllRefUpdates", "false")
         if ignore_remember:
             self.write(".remember/.gitignore", "*\n")
         else:
@@ -599,21 +603,35 @@ class ClaimDrift(unittest.TestCase):
         self.commit_at(time.time() - 3 * 3600, "first")
         old = time.time() - 3 * 3600
         os.utime(os.path.join(self.repo.root, "a.txt"), (old, old))
+        self.age_refs(old)
         self.handoff = os.path.join(self.repo.root, ".remember", "remember.md")
 
     def commit_at(self, epoch, msg):
         when = f"{int(epoch)} +0000"
         subprocess.run(GIT + ["commit", "-q", "--allow-empty", "-m", msg], cwd=self.repo.root, check=True,
                        env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+        self.age_refs(epoch)
+
+    def age_refs(self, epoch):
+        # Drift dates ref moves by the mtimes of git's ref storage, so a ref update made in setup
+        # must carry the time it stands for, as a.txt does, or it reads as a move made just now.
+        common = os.path.join(self.repo.root, ".git")
+        for name in ("HEAD", "packed-refs", "refs", "logs", "reftable", "worktrees"):
+            top = os.path.join(common, name)
+            paths = [top] if os.path.lexists(top) else []
+            for d, dirs, files in os.walk(top):
+                paths += [os.path.join(d, n) for n in dirs + files]
+            for p in paths:
+                os.utime(p, (epoch, epoch), follow_symlinks=False)
 
     def write_own_handoff(self, minutes_ago=0, at=None):
         self.repo.write(".remember/remember.md", f"# Handoff\nSession: {SESSION_A}\n")
         then = at if at is not None else time.time() - minutes_ago * 60
         os.utime(self.handoff, (then, then))
 
-    def drift(self, session=SESSION_A, config=None):
+    def drift(self, session=SESSION_A, config=None, cwd=None):
         extra = ("--config", config) if config else ()
-        rc, lines, err = run_flag(self.repo.root, "--claim", session, None, *extra)
+        rc, lines, err = run_flag(cwd or self.repo.root, "--claim", session, None, *extra)
         self.assertEqual(rc, 0, err)
         return dict(l.split(": ", 1) for l in lines)["drift"]
 
@@ -852,6 +870,525 @@ class ClaimDrift(unittest.TestCase):
         os.utime(tmp, (then, then))
         os.replace(tmp, self.handoff)
         self.assertIn("1 file changed", self.drift())
+
+    # A ref moved onto a commit that already existed changes neither the commit count nor any file,
+    # yet makes claims such as "main at <sha>" or "level with origin" stale.
+
+    def assert_counts_as(self, d, counts):
+        """A limit that differs by backend: drift reports refs moved, or it reports exactly none."""
+        if counts:
+            self.assertIn("refs moved", d)
+        else:
+            self.assertEqual(d, "none")
+
+    def skip_without_subsecond_mtimes(self):
+        probe = os.path.join(self.outside_dir(), "probe")
+        open(probe, "w").close()
+        os.utime(probe, (1000000000.25, 1000000000.25))
+        if os.stat(probe).st_mtime != 1000000000.25:
+            self.skipTest("this filesystem keeps mtimes only to the second")
+
+    def write_quiet_handoff(self):
+        """The handoff, written an hour ago over a project that reports no drift. A test that asks
+        for drift afterwards then proves the operation it ran is what raised it."""
+        self.write_own_handoff(minutes_ago=60)
+        self.assertEqual(self.drift(), "none", "the fixture moved a ref after the handoff")
+
+    def branch_ahead(self):
+        """dev/7, one commit ahead of main, made two hours before the handoff."""
+        self.repo.git("switch", "-q", "-c", "dev/7")
+        self.commit_at(time.time() - 7200, "widget")
+        self.repo.git("switch", "-q", "main")
+        self.age_refs(time.time() - 7200)
+
+    def origin(self):
+        """A local bare remote that main was pushed to two hours before the handoff."""
+        bare = os.path.join(self.outside_dir(), "origin.git")
+        subprocess.run(GIT + ["init", "-q", "--bare", bare], check=True, capture_output=True)
+        self.repo.git("remote", "add", "origin", bare)
+        self.repo.git("push", "-q", "origin", "main")
+        # A first fetch can create refs/remotes/origin/HEAD (remote.origin.followRemoteHEAD), as a
+        # clone does, so the fetches these tests make start from a remote already followed.
+        self.repo.git("fetch", "-q", "origin")
+        self.age_refs(time.time() - 7200)
+        return bare
+
+    def linked_worktree(self, name="linked"):
+        path = os.path.join(self.outside_dir(), name)
+        self.repo.git("worktree", "add", "-q", "-b", name, path, "main")
+        self.age_refs(time.time() - 7200)
+        return path
+
+    def test_a_fast_forward_merge_onto_an_older_commit_is_counted(self):
+        self.branch_ahead()
+        self.write_quiet_handoff()
+        self.repo.git("merge", "-q", "--ff-only", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def test_switching_to_an_existing_branch_is_counted(self):
+        self.branch_ahead()
+        self.write_quiet_handoff()
+        self.repo.git("switch", "-q", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_reset_onto_an_older_commit_is_counted(self):
+        self.branch_ahead()
+        self.write_quiet_handoff()
+        self.repo.git("reset", "-q", "--hard", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_push_of_older_commits_is_counted(self):
+        self.origin()
+        self.commit_at(time.time() - 7200, "ahead of origin")
+        self.write_quiet_handoff()
+        self.repo.git("push", "-q", "origin", "main")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_fetch_of_commits_made_before_the_handoff_is_counted(self):
+        self.origin()
+        self.branch_ahead()
+        self.repo.git("push", "-q", "origin", "dev/7:side")
+        self.repo.git("update-ref", "-d", "refs/remotes/origin/side")  # as if another clone pushed it
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("fetch", "-q", "origin")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_pull_onto_an_older_commit_is_counted(self):
+        self.origin()
+        self.branch_ahead()
+        self.repo.git("push", "-q", "origin", "dev/7:side")
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("pull", "-q", "--ff-only", "origin", "side")
+        self.assertIn("refs moved", self.drift())
+
+    def test_deleting_a_branch_is_counted(self):
+        self.branch_ahead()
+        self.write_quiet_handoff()
+        self.repo.git("branch", "-q", "-D", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def test_deleting_a_branch_beside_another_in_its_directory_is_counted(self):
+        # refs/heads/dev/ survives, so only that nested directory records the deletion.
+        self.branch_ahead()
+        self.repo.git("branch", "dev/8")
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("branch", "-q", "-D", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def turn_reflogs_off(self):
+        self.repo.git("config", "core.logAllRefUpdates", "false")
+        shutil.rmtree(os.path.join(self.repo.root, ".git", "logs"), ignore_errors=True)  # reftable has none
+
+    def test_deleting_a_branch_is_counted_with_reflogs_turned_off(self):
+        self.turn_reflogs_off()
+        self.branch_ahead()
+        self.write_quiet_handoff()
+        self.repo.git("branch", "-q", "-D", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_switch_is_counted_with_reflogs_turned_off(self):
+        # Only HEAD is rewritten.
+        self.turn_reflogs_off()
+        self.branch_ahead()
+        self.write_quiet_handoff()
+        self.repo.git("switch", "-q", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_packed_remote_branch_pruned_with_reflogs_turned_off_is_counted(self):
+        # Only packed-refs is rewritten.
+        bare = self.origin()
+        self.turn_reflogs_off()
+        self.branch_ahead()
+        self.repo.git("push", "-q", "origin", "dev/7:side")
+        self.repo.git("pack-refs", "--all")
+        subprocess.run(GIT + ["update-ref", "-d", "refs/heads/side"], cwd=bare, check=True)
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("fetch", "-q", "--prune", "origin")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_commit_later_in_the_handoffs_own_second_shows_as_refs_moved(self):
+        self.skip_without_subsecond_mtimes()
+        second = int(time.time()) - 600
+        self.write_own_handoff(at=second + 0.5)
+        self.commit_at(second, "same second, after the handoff")
+        self.age_refs(second + 0.7)
+        d = self.drift()
+        self.assertIn("refs moved", d)
+        self.assertNotIn("commit", d)
+
+    def test_adding_a_linked_worktree_is_counted(self):
+        self.write_quiet_handoff()
+        self.repo.git("worktree", "add", "-q", "-b", "added", os.path.join(self.outside_dir(), "added"))
+        self.assertIn("refs moved", self.drift())
+
+    def test_ref_storage_written_at_the_handoffs_own_instant_is_not_drift(self):
+        self.branch_ahead()
+        then = time.time() - 3600
+        self.age_refs(then)
+        self.write_own_handoff(at=then)
+        self.assertEqual(self.drift(), "none")
+
+    def test_deleting_a_tag_is_counted(self):
+        self.repo.git("tag", "v1")
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("tag", "-d", "v1")
+        self.assertIn("refs moved", self.drift())
+
+    def prune_side_after_the_handoff(self):
+        """origin/side, a loose remote-tracking ref, deleted by fetch --prune after the handoff."""
+        bare = self.origin()
+        self.branch_ahead()
+        self.repo.git("push", "-q", "origin", "dev/7:side")
+        subprocess.run(GIT + ["update-ref", "-d", "refs/heads/side"], cwd=bare, check=True)
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("fetch", "-q", "--prune", "origin")
+
+    def test_a_remote_branch_pruned_by_fetch_is_counted(self):
+        self.prune_side_after_the_handoff()
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_loose_remote_branch_pruned_with_reflogs_turned_off(self):
+        # refs/remotes below the top is not dated, because a fetch can re-date it without moving a
+        # ref, so on the files backend this deletion leaves nothing that is.
+        self.turn_reflogs_off()
+        self.prune_side_after_the_handoff()
+        d = self.drift()
+        self.assert_counts_as(d, self.pruned_loose_remote_ref_is_seen)
+
+    def test_deleting_a_remote_tracking_branch_is_counted(self):
+        self.origin()
+        self.write_quiet_handoff()
+        self.repo.git("branch", "-q", "-dr", "origin/main")
+        self.assertIn("refs moved", self.drift())
+
+    def test_removing_a_remote_is_counted(self):
+        self.origin()
+        self.write_quiet_handoff()
+        self.repo.git("remote", "remove", "origin")
+        self.assertIn("refs moved", self.drift())
+
+    def test_dropping_the_last_stash_is_counted(self):
+        self.repo.write("a.txt", "stashed\n")
+        when = f"{int(time.time()) - 7200} +0000"  # a stash is two commits, which must not be new
+        subprocess.run(GIT + ["stash", "-q"], cwd=self.repo.root, check=True,
+                       env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+        self.age("a.txt", 7200)
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("stash", "drop", "-q")
+        self.assertIn("refs moved", self.drift())
+
+    def test_deleting_a_ref_in_a_custom_namespace_is_counted(self):
+        self.repo.git("update-ref", "refs/custom/x", "HEAD")
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("update-ref", "-d", "refs/custom/x")
+        self.assertIn("refs moved", self.drift())
+
+    def test_removing_a_linked_worktree_while_another_remains_is_counted(self):
+        self.linked_worktree("one")
+        other = self.linked_worktree("two")
+        self.write_quiet_handoff()
+        self.repo.git("worktree", "remove", other)
+        self.assertIn("refs moved", self.drift())
+
+    def test_removing_the_last_linked_worktree_is_not_seen(self):
+        # A documented limit: git deletes .git/worktrees/ with the last one, leaving nothing to date.
+        linked = self.linked_worktree()
+        self.write_quiet_handoff()
+        self.repo.git("worktree", "remove", linked)
+        self.assertEqual(self.drift(), "none")
+
+    def test_a_ref_move_is_counted_with_reflogs_turned_off(self):
+        self.turn_reflogs_off()
+        self.branch_ahead()
+        self.write_quiet_handoff()
+        self.repo.git("merge", "-q", "--ff-only", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_ref_move_is_counted_with_the_reftable_backend(self):
+        try:
+            self.use_repo(ref_format="reftable")
+        except subprocess.CalledProcessError:
+            self.skipTest("this git has no reftable backend")
+        self.branch_ahead()
+        self.write_quiet_handoff()
+        self.repo.git("merge", "-q", "--ff-only", "dev/7")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_switch_inside_a_linked_worktree_is_counted(self):
+        self.branch_ahead()
+        linked = self.linked_worktree()
+        handoff = os.path.join(linked, ".remember", "remember.md")
+        os.makedirs(os.path.dirname(handoff))
+        with open(handoff, "w") as fh:
+            fh.write(f"# Handoff\nSession: {SESSION_A}\n")
+        then = time.time() - 3600
+        os.utime(handoff, (then, then))
+        self.assertEqual(self.drift(cwd=linked), "none", "the fixture moved a ref after the handoff")
+        subprocess.run(GIT + ["switch", "-q", "dev/7"], cwd=linked, check=True, capture_output=True)
+        self.assertIn("refs moved", self.drift(cwd=linked))
+
+    def test_a_switch_in_another_worktree_is_counted(self):
+        # A handoff can say which branch each worktree has checked out, so this is drift by design.
+        self.branch_ahead()
+        linked = self.linked_worktree()
+        self.write_quiet_handoff()
+        subprocess.run(GIT + ["switch", "-q", "dev/7"], cwd=linked, check=True, capture_output=True)
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_fetch_that_brings_nothing_new_is_not_drift(self):
+        self.origin()
+        self.write_quiet_handoff()
+        self.repo.git("fetch", "-q", "origin")
+        self.assertEqual(self.drift(), "none")
+
+    # Documented limits that differ by backend. ClaimDriftReftable flips these flags rather than
+    # overriding the tests, so each test keeps one name and one assertion.
+    prefetch_counts = False
+    pruned_loose_remote_ref_is_seen = False
+    up_to_date_pull_counts = False
+    gc_without_reflogs_counts = True  # gc packs the loose refs
+
+    def prefetch_after_the_handoff(self, *config):
+        """Drift after a prefetch adds a ref when refs/prefetch already existed at the handoff.
+        The commit reaches the remote by URL, so no remote-tracking ref changes."""
+        bare = self.origin()
+        self.branch_ahead()
+        for setting in config:
+            self.repo.git("config", *setting.split())
+        self.repo.git("maintenance", "run", "--task=prefetch")
+        self.repo.git("push", "-q", bare, "dev/7:refs/heads/side")
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("maintenance", "run", "--task=prefetch")
+        return self.drift()
+
+    def test_a_later_prefetch_that_adds_a_ref_counts_as_the_backend_does(self):
+        # Prefetch fills refs/prefetch/ in the background; the refs a handoff names do not move.
+        d = self.prefetch_after_the_handoff()
+        self.assert_counts_as(d, self.prefetch_counts)
+
+    def test_a_later_prefetch_that_adds_a_ref_with_reflogs_for_every_ref_counts_as_the_backend_does(self):
+        # core.logAllRefUpdates=always also logs refs/prefetch, under logs/refs/prefetch.
+        d = self.prefetch_after_the_handoff("core.logAllRefUpdates always")
+        self.assert_counts_as(d, self.prefetch_counts)
+
+    def test_the_first_maintenance_prefetch_counts_as_refs_moved(self):
+        # Creating refs/prefetch re-dates refs/, so on the files backend this alarms once per repo.
+        self.origin()
+        self.write_quiet_handoff()
+        self.repo.git("maintenance", "run", "--task=prefetch")
+        self.assertIn("refs moved", self.drift())
+
+    def test_gc_after_the_handoff_counts_as_refs_moved(self):
+        # gc packs loose refs, rewriting ref storage without moving a ref: a documented limit.
+        self.branch_ahead()
+        self.write_quiet_handoff()
+        self.repo.git("gc", "-q")
+        self.assertIn("refs moved", self.drift())
+
+    def test_gc_counts_after_reflogs_were_written_even_if_they_are_now_turned_off(self):
+        # The stack or the loose refs still hold reflog records, and gc rewrites them.
+        self.repo.git("config", "core.logAllRefUpdates", "false")
+        self.write_quiet_handoff()
+        self.repo.git("gc", "-q")
+        self.assertIn("refs moved", self.drift())
+
+    def test_gc_in_a_repo_that_never_wrote_a_reflog_counts_as_the_backend_does(self):
+        self.use_repo(logs_off=True)
+        self.write_quiet_handoff()
+        self.repo.git("gc", "-q")
+        self.assert_counts_as(self.drift(), self.gc_without_reflogs_counts)
+
+    def test_a_repeat_prefetch_that_fetches_nothing_new_is_not_drift(self):
+        self.origin()
+        self.repo.git("maintenance", "run", "--task=prefetch")
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("maintenance", "run", "--task=prefetch")
+        self.assertEqual(self.drift(), "none")
+
+    def test_a_fetch_that_creates_the_remote_head_counts_as_refs_moved(self):
+        self.origin()
+        self.repo.git("update-ref", "-d", "refs/remotes/origin/HEAD")
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("fetch", "-q", "origin")
+        self.assertIn("refs moved", self.drift())
+
+    def test_repairing_worktrees_counts_when_their_paths_are_relative(self):
+        # repair rewrites each gitdir file with the content it already has.
+        self.repo.git("config", "worktree.useRelativePaths", "true")
+        linked = self.linked_worktree()
+        gitdir = os.path.join(self.repo.root, ".git", "worktrees", os.path.basename(linked), "gitdir")
+        with open(gitdir) as fh:
+            if os.path.isabs(fh.read().strip()):
+                self.skipTest("this git writes absolute worktree paths")
+        self.write_quiet_handoff()
+        self.repo.git("worktree", "repair")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_switch_inside_a_linked_worktree_is_counted_with_reflogs_turned_off(self):
+        # Only the linked worktree's own HEAD is rewritten; on reftable its stack records the switch.
+        self.turn_reflogs_off()
+        self.branch_ahead()
+        linked = self.linked_worktree()
+        self.write_quiet_handoff()
+        subprocess.run(GIT + ["switch", "-q", "dev/7"], cwd=linked, check=True, capture_output=True)
+        self.assertIn("refs moved", self.drift())
+
+    def test_deleting_a_loose_ref_directly_under_refs_is_counted(self):
+        # No reflog names refs/foo, and refs/ is the only directory that records its deletion.
+        self.repo.git("update-ref", "refs/foo", "HEAD")
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("update-ref", "-d", "refs/foo")
+        self.assertIn("refs moved", self.drift())
+
+    def test_deleting_a_loose_ref_directly_under_refs_is_counted_with_reflogs_turned_off(self):
+        self.turn_reflogs_off()
+        self.repo.git("update-ref", "refs/foo", "HEAD")
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("update-ref", "-d", "refs/foo")
+        self.assertIn("refs moved", self.drift())
+
+    def test_writes_that_move_no_ref_still_count_as_refs_moved(self):
+        # Documented limits: each of these rewrites ref storage, so drift cannot tell it from a move.
+        def with_a_second_commit():
+            self.commit_at(time.time() - 7200, "second")
+            self.age_refs(time.time() - 7200)
+
+        def with_origin_head_set():
+            with_a_second_commit()
+            self.origin()
+            self.repo.git("remote", "set-head", "origin", "--auto")
+            self.age_refs(time.time() - 7200)
+
+        cases = {
+            "a switch to the branch already checked out": (lambda: None, ("switch", "-q", "main")),
+            "git reset with no target": (lambda: None, ("reset", "-q")),
+            "an update-ref to the value a ref already has": (lambda: None, ("update-ref", "refs/heads/main", "HEAD")),
+            "reflog expire": (lambda: None, ("reflog", "expire", "--expire=now", "--all")),
+            "set-head --auto that changes nothing": (
+                with_origin_head_set, ("remote", "set-head", "origin", "--auto")),
+        }
+        for name, (prepare, command) in cases.items():
+            with self.subTest(name):
+                self.use_repo()
+                prepare()
+                self.write_quiet_handoff()
+                self.repo.git(*command)
+                self.assertIn("refs moved", self.drift())
+
+    def test_bisecting_and_resetting_counts_as_refs_moved(self):
+        self.commit_at(time.time() - 7200, "second")
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git("bisect", "start", "HEAD", "HEAD~1")
+        self.repo.git("bisect", "reset")
+        self.assertIn("refs moved", self.drift())
+
+    def test_a_commit_after_the_handoff_also_shows_as_refs_moved(self):
+        self.write_quiet_handoff()
+        self.repo.commit("b.txt", "b\n", "later")
+        self.assertIn("1 commit, refs moved since the handoff was written", self.drift())
+
+    def test_fetch_counts_when_the_remote_head_is_followed_on_every_fetch(self):
+        self.origin()
+        self.repo.git("config", "remote.origin.followRemoteHEAD", "always")
+        self.write_quiet_handoff()
+        self.repo.git("fetch", "-q", "origin")
+        self.assertIn("refs moved", self.drift())
+
+    def up_to_date_update_with_orig_head(self, orig_head, command):
+        """Drift after a pull or merge that has nothing to do. orig_head None means no ORIG_HEAD."""
+        self.commit_at(time.time() - 7200, "second")
+        self.origin()
+        if orig_head is None:
+            self.repo.git("update-ref", "-d", "ORIG_HEAD")
+        else:
+            self.repo.git("update-ref", "ORIG_HEAD", orig_head)
+        self.age_refs(time.time() - 7200)
+        self.write_quiet_handoff()
+        self.repo.git(*command)
+        return self.drift()
+
+    PULL = ("pull", "-q", "--ff-only", "origin", "main")
+    MERGE = ("merge", "-q", "origin/main")
+
+    def test_an_up_to_date_pull_when_orig_head_differs_counts_as_the_backend_does(self):
+        d = self.up_to_date_update_with_orig_head("HEAD~1", self.PULL)
+        self.assert_counts_as(d, self.up_to_date_pull_counts)
+
+    def test_an_up_to_date_pull_when_orig_head_is_absent_counts_as_the_backend_does(self):
+        d = self.up_to_date_update_with_orig_head(None, self.PULL)
+        self.assert_counts_as(d, self.up_to_date_pull_counts)
+
+    def test_an_up_to_date_merge_when_orig_head_differs_counts_as_the_backend_does(self):
+        d = self.up_to_date_update_with_orig_head("HEAD~1", self.MERGE)
+        self.assert_counts_as(d, self.up_to_date_pull_counts)
+
+    def test_an_up_to_date_pull_when_orig_head_equals_head_is_not_drift(self):
+        self.assertEqual(self.up_to_date_update_with_orig_head("HEAD", self.PULL), "none")
+
+    def test_an_up_to_date_merge_when_orig_head_equals_head_is_not_drift(self):
+        self.assertEqual(self.up_to_date_update_with_orig_head("HEAD", self.MERGE), "none")
+
+    def test_removing_a_remote_is_counted_with_reflogs_turned_off(self):
+        # Without reflogs, only the refs/remotes directory itself records that origin/ went away.
+        self.turn_reflogs_off()
+        self.origin()
+        self.write_quiet_handoff()
+        self.repo.git("remote", "remove", "origin")
+        self.assertIn("refs moved", self.drift())
+
+    def test_moving_a_linked_worktree_is_counted(self):
+        linked = self.linked_worktree()
+        self.write_quiet_handoff()
+        self.repo.git("worktree", "move", linked, os.path.join(self.outside_dir(), "moved"))
+        self.assertIn("refs moved", self.drift())
+
+    def test_locking_unlocking_repairing_and_listing_worktrees_is_not_drift(self):
+        linked = self.linked_worktree()
+        self.write_quiet_handoff()
+        self.repo.git("worktree", "lock", linked)
+        self.repo.git("worktree", "unlock", linked)
+        self.repo.git("worktree", "repair")
+        self.repo.git("worktree", "list")
+        self.assertEqual(self.drift(), "none")
+
+    def test_a_switch_in_another_worktree_is_counted_when_the_path_has_glob_characters(self):
+        self.use_repo(suffix="[ab]")
+        self.branch_ahead()
+        linked = self.linked_worktree()
+        self.write_quiet_handoff()
+        subprocess.run(GIT + ["switch", "-q", "dev/7"], cwd=linked, check=True, capture_output=True)
+        self.assertIn("refs moved", self.drift())
+
+
+class ClaimDriftReftable(ClaimDrift):
+    """Every ClaimDrift case again on the reftable backend, which keeps refs in a table stack
+    instead of files."""
+
+    def use_repo(self, **repo_options):
+        repo_options.setdefault("ref_format", "reftable")
+        try:
+            super().use_repo(**repo_options)
+        except subprocess.CalledProcessError:
+            self.skipTest("this git has no reftable backend")
+
+    prefetch_counts = True  # refs/prefetch lives in the same table stack as every other ref
+    pruned_loose_remote_ref_is_seen = True  # every deletion writes a new table
+    up_to_date_pull_counts = True  # ORIG_HEAD is a ref here, and pull rewrites it when it differs
+    gc_without_reflogs_counts = False  # with one table and no reflog records, gc has nothing to rewrite
 
 
 class HandoffStampCheck(unittest.TestCase):
