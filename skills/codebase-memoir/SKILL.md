@@ -57,7 +57,8 @@ v0.11.0 the `watcher_enabled` setting (on by default) is a master switch: with i
 watcher runs. Do not full-reindex such a project for ordinary code changes. Any other indexed
 project (a cross-repo target, a project indexed under a `name` override, a repo no open session
 is in) is not refreshed: run `index_repository` on it after its code changes, for example after
-pulling new commits. If `auto_watch` is off, treat every project this way.
+pulling new commits. If any of these conditions fails (for example `auto_watch` or
+`watcher_enabled` is off), treat every project this way.
 
 `index_status` reports project health (counts, status, coverage). Through v0.10.8 it has no
 freshness; v0.11.0 adds a project-level `indexed_at`. For freshness on specific files, call
@@ -194,17 +195,19 @@ that point away from them, not toward them:
   live. For those, read the source for an external base class or interface.
 
 Entry points are flagged by an `is_entry_point` property on the node, not by an edge. The
-indexer sets it only on exported JavaScript and TypeScript functions and on functions named
-`main`, so it is false on most live code in other languages and a false value says nothing about
-deadness. Read it with `search_graph` and `fields=["is_entry_point", "is_exported"]`
-(`is_exported` is a separate property, set by per-language rules). `search_graph`'s
+indexer sets it only on exported JavaScript and TypeScript functions (v0.11.0 also ArkTS) and
+on free functions named `main` (a class method such as Java's `static main` is not flagged), so it
+is false on most live code in other languages and a false value says nothing about deadness. Read
+it with `search_graph` using `name_pattern` or `qn_pattern` (a `query` search ignores `fields`) and
+`fields=["is_entry_point", "is_exported"]` (`is_exported` is a separate property, set by
+per-language rules). `search_graph`'s
 `exclude_entry_points` filter does not read this property: it drops nodes with no inbound
 `CALLS` edge and at least one outbound `CALLS` edge.
 
 Pass the `qualified_name` from `search_graph` as `trace_path`'s `function_name` for every probe
-above. A bare name can match several nodes. Two or more real definitions make `trace_path`
-return a list of suggestions instead of a trace; otherwise it merges the traversals of every
-node with that name, so the probe can pass on another symbol's callers.
+above. A bare name can match several nodes; `trace_path` then either returns a list of
+suggestions instead of a trace, or merges the traversals of every node with that name, so the
+probe can pass on another symbol's callers.
 
 Treat a function as dead only when none of these links exist and its source shows no dynamic
 use such as reflection or string dispatch.
