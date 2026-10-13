@@ -4,6 +4,17 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
+## [2.0.0](https://github.com/rubicon/ai-skills/compare/codebase-memoir-v1.0.0...codebase-memoir-v2.0.0) (2026-10-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* the codebase-memory skill is removed. Install codebase-memoir with skillshare -s codebase-memoir instead of -s codebase-memory.
+
+### Features
+
+* replace codebase-memory with codebase-memoir, the maintained version ([#127](https://github.com/rubicon/ai-skills/issues/127)) ([b0ce643](https://github.com/rubicon/ai-skills/commit/b0ce6439db36d8cd8323bd3d26f8fed992b6bd9f))
+
 ## [1.0.0] — 2026-10-12
 
 ### Added

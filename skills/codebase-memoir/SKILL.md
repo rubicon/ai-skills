@@ -1,6 +1,6 @@
 ---
 name: codebase-memoir
-version: 1.0.0  # x-release-please-version
+version: 2.0.0  # x-release-please-version
 description: >-
   Judgment and practices for a codebase-memory-mcp knowledge graph. Load it alongside the
   codebase-memory tool reference whenever the task is more than tool syntax. Triggers on:
