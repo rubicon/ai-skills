@@ -8,9 +8,9 @@ Ask the user for a decision through the AskUserQuestion pop-up with two judgment
 skillshare install github.com/rubicon/ai-skills -s right-stuff
 ```
 
-## Optional always-on line
+## Always-on line (recommended)
 
-The skill loads when an agent decides to ask. In testing, the description alone loaded it before every pop-up in a clean setup (16 of 16 runs). An agent that is ordered to run a risky step, such as a deploy, may never decide to ask, and then the skill never loads. With only a plain "ask in a pop-up" pointer, a deploy ran unasked in 4 of 5 test runs; with the line below, in 0 of 5. Without this line the skill does not stop that, so add it to your global instructions file (for Claude Code, `CLAUDE.md`):
+The skill loads when an agent decides to ask. In testing, the description alone loaded it before every pop-up in a clean setup (16 of 16 runs). An agent that is ordered to run a risky step, such as a deploy, may never decide to ask, and then the skill never loads. In one test, two always-on lines (ask in a pop-up; invoke the skill before every AskUserQuestion call) still let a deploy run unasked in 4 of 5 runs; the same two lines with the invoke line extended to risky steps, as below, let it run in 0 of 5. The line below was not tested on its own. Add it to your global instructions file (for Claude Code, `CLAUDE.md`):
 
 ```text
 Before every AskUserQuestion call, and before any production deploy, deletion, force-push, or other destructive or outward-facing step, invoke the `right-stuff` skill and follow it.
