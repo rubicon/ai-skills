@@ -25,10 +25,10 @@ skillshare install github.com/rubicon/ai-skills --track
 skillshare install github.com/rubicon/ai-skills -s relocate-session
 
 # Install several (-s accepts a comma-separated list)
-skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memory
+skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memoir
 
 # Every skill published here
-skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memory,goalpost,grand-tour,identity-theft,relocate-session,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
+skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memoir,codex-review,goalpost,grand-tour,identity-theft,relocate-session,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
 ```
 
 ## Skills
@@ -40,13 +40,14 @@ skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,
 | [rubicon-wordpress-version-lab](skills/rubicon-wordpress-version-lab/SKILL.md) | Create and manage isolated Docker-only WordPress version test labs on an SSH-reachable host (e.g. a Synology NAS) via docker compose |
 | [identity-theft](skills/identity-theft/SKILL.md) | Steals fictional identities, not personal data — rewrites your text, Markdown, or HTML in a character's voice (Ron Swanson, Yoda, pirate, and 48 more) while code, links, and facts survive untouched |
 | [cache-money](skills/cache-money/SKILL.md) | Keep Claude Code sessions cheap and sharp — session hygiene, `CLAUDE.md` discipline, native auto-compaction controls, model selection, and context-cost habits |
-| [codebase-memory](skills/codebase-memory/SKILL.md) | Query a codebase knowledge graph via MCP instead of grep — callers, impact radius, architecture, dead code, and tiered evidence standards |
+| [codebase-memoir](skills/codebase-memoir/SKILL.md) | Work well with a `codebase-memory-mcp` knowledge graph — query it before grepping, keep the index healthy, write the repo's ADR from evidence, and check coverage before claiming anything is absent |
 | [relocate-session](skills/relocate-session/SKILL.md) | Move a session or a whole project directory to a new path without silently orphaning auto-memory — carries it across, verifies it, and reports what stays behind |
 | [second-look](skills/second-look/SKILL.md) | An intent-first review by a fresh agent — checks the change against what you finally asked for, including later changes and deferrals, then runs the bug hunt |
 | [grand-tour](skills/grand-tour/SKILL.md) | An onboarding tour of a codebase — what it is, its main parts, one real flow traced through the code, the traps a newcomer hits, and where to start |
 | [goalpost](skills/goalpost/SKILL.md) | Write a Claude Code `/goal` line a long unattended run can finish — observable outcome, evidence shown in the conversation, constraints, and an escape clause so an impossible goal stops instead of looping |
 | [showdown](skills/showdown/SKILL.md) | Put two or three genuinely different approaches head to head on the same terms, pick one argued from the goal, and name what would flip it — a decision, not a plan |
 | [anger-translator](skills/anger-translator/SKILL.md) | Turn a heated draft into a firm, professional message you can send at work — keeps the facts, the ask, and the consequences you stated; removes the heat; flags the political risk |
+| [codex-review](skills/codex-review/SKILL.md) | Get an independent code review from the Codex CLI: review a branch, uncommitted work, or one commit with invocations that work, and report the findings as advisory |
 
 ## Plugins
 
