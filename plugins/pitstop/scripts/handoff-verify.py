@@ -40,15 +40,22 @@ Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .rem
                 rewrote its ref storage after the handoff: a ref created, moved or deleted by a
                 merge, switch, reset, push, fetch, pull, branch, tag or stash command, even onto
                 commits older than the handoff, in any worktree of the repo (a handoff can say
-                what each one has checked out), or a linked worktree added, or removed while
-                another remains. Limits: a commit made in the handoff's own second is not counted
-                as a commit, though one made after the handoff still shows as refs moved. Some
-                writes print "refs moved" with no ref moved: git gc, the pack-refs task of git
-                maintenance on the files backend, maintenance prefetch on the reftable backend, a
-                switch or checkout of the branch already checked out, git reset with no target,
-                and git remote set-head --auto that changes nothing. Not seen: removing the last
-                linked worktree, and, on the files backend with core.logAllRefUpdates off, a loose
-                remote-tracking ref that is deleted, as by fetch --prune.
+                what each one has checked out), or a linked worktree added or moved, or removed
+                while another remains. A new commit prints it too: "1 commit, refs moved".
+                Limits: a commit made in the handoff's own second is not counted as a commit,
+                though one made after the handoff still shows as refs moved. Some writes print
+                "refs moved" with no ref moved: git gc, git pack-refs and the pack-refs task of
+                git maintenance (on the reftable backend, depending on how many tables the stack
+                holds), git reflog expire, a switch or checkout of the branch already checked out,
+                git reset with no target, an update-ref to the value the ref has, git bisect start
+                then reset, git remote set-head --auto that changes nothing, a fetch when
+                remote.<name>.followRemoteHEAD is "always", the first maintenance prefetch in a
+                repo (it creates refs/prefetch), every maintenance prefetch on the reftable
+                backend, and, there too, an up-to-date pull or merge whenever ORIG_HEAD is absent
+                or differs from HEAD. Not seen: removing the last linked worktree, and, on the
+                files backend with core.logAllRefUpdates off, a loose remote-tracking ref that is
+                deleted, as by fetch --prune. The contents of an unreadable ref directory are not
+                searched.
                 Edits to journal.md and to files in drafts/
                 beside the handoff are skipped whoever makes them, so with handoff_path:
                 docs/remember.md, edits to a tracked docs/journal.md are not counted; deleting the
@@ -257,13 +264,15 @@ def ref_storage(common):
     """What git writes when a ref is created, moved or deleted: every file under HEAD, packed-refs,
     refs/, logs/ and reftable/, for the main worktree and each linked one. On the files backend a
     deleted ref leaves no file behind, so the directories under refs/ and logs/ are included, and
-    so is .git/worktrees/ itself, which a removed worktree changes. Directories under refs/remotes
-    are not: under remote.<name>.followRemoteHEAD ("create" by default) a fetch can lock
-    <name>/HEAD there, re-dating the directory without moving a ref; a remote-tracking ref deleted
-    there is still dated by its reflog's directory. refs/prefetch, which background maintenance
-    fills, is skipped."""
+    so is .git/worktrees/ itself, which a removed worktree changes, and each linked worktree's
+    gitdir file, which a move rewrites. Directories below refs/remotes are not: under
+    remote.<name>.followRemoteHEAD ("create" by default) a fetch can lock <name>/HEAD there,
+    re-dating the directory without moving a ref; a remote-tracking ref deleted there is still
+    dated by its reflog's directory. refs/remotes itself is dated, so a removed remote shows.
+    refs/prefetch, which background maintenance fills, is skipped."""
     yield os.path.join(common, "worktrees")
     for gitdir in [common] + glob.glob(os.path.join(glob.escape(common), "worktrees", "*")):
+        yield os.path.join(gitdir, "gitdir")
         for name in ("HEAD", "packed-refs", "refs", "logs", "reftable"):
             root = os.path.join(gitdir, name)
             if not os.path.isdir(root):
@@ -272,7 +281,7 @@ def ref_storage(common):
             for d, dirs, files in os.walk(root):
                 rel = os.path.relpath(d, common)
                 dirs[:] = [n for n in dirs if os.path.join(rel, n) not in PREFETCH_DIRS]
-                if name != "reftable" and not (rel == REMOTE_REF_DIR or rel.startswith(REMOTE_REF_DIR + os.sep)):
+                if name != "reftable" and not rel.startswith(REMOTE_REF_DIR + os.sep):
                     yield d
                 yield from (os.path.join(d, n) for n in files)
 

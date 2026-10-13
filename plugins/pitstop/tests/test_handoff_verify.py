@@ -1242,6 +1242,20 @@ class ClaimDrift(unittest.TestCase):
     def test_an_up_to_date_pull_when_orig_head_equals_head_is_not_drift(self):
         self.assertEqual(self.up_to_date_pull_with_orig_head("HEAD"), "none")
 
+    def test_removing_a_remote_is_counted_with_reflogs_turned_off(self):
+        # Without reflogs, only the refs/remotes directory itself records that origin/ went away.
+        self.turn_reflogs_off()
+        self.origin()
+        self.write_quiet_handoff()
+        self.repo.git("remote", "remove", "origin")
+        self.assertIn("refs moved", self.drift())
+
+    def test_moving_a_linked_worktree_is_counted(self):
+        linked = self.linked_worktree()
+        self.write_quiet_handoff()
+        self.repo.git("worktree", "move", linked, os.path.join(self.outside_dir(), "moved"))
+        self.assertIn("refs moved", self.drift())
+
     def test_locking_unlocking_repairing_and_listing_worktrees_is_not_drift(self):
         linked = self.linked_worktree()
         self.write_quiet_handoff()
