@@ -37,6 +37,10 @@
       "package-name": "codebase-memoir",
       "extra-files": ["SKILL.md"]
     },
+    "skills/codex-review": {
+      "package-name": "codex-review",
+      "extra-files": ["SKILL.md"]
+    },
     "skills/goalpost": {
       "package-name": "goalpost",
       "extra-files": ["SKILL.md"]
