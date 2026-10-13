@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [1.4.2](https://github.com/rubicon/ai-skills/compare/v1.4.1...v1.4.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* **pitstop:** make park mark user-stated claims, re-read files, and finish when nothing drifted ([#130](https://github.com/rubicon/ai-skills/issues/130)) ([972fd18](https://github.com/rubicon/ai-skills/commit/972fd187de0147583ab0d2f514d3c59c073546a4)), closes [#126](https://github.com/rubicon/ai-skills/issues/126)
+* **pitstop:** scope park's re-derive rule and drop inherited labels when nothing drifted ([#137](https://github.com/rubicon/ai-skills/issues/137)) ([c695165](https://github.com/rubicon/ai-skills/commit/c6951650cbaf44126cc6d80d83b8ee4f57b5ad62)), closes [#134](https://github.com/rubicon/ai-skills/issues/134)
+* **pitstop:** stop drift counting park's own files, same-second commits and earlier deletions ([#129](https://github.com/rubicon/ai-skills/issues/129)) ([41b1599](https://github.com/rubicon/ai-skills/commit/41b1599656423250f55f50b829b2783042cd0dee))
+
 ## [1.4.1](https://github.com/rubicon/ai-skills/compare/v1.4.0...v1.4.1) (2026-10-11)
 
 
@@ -55,6 +64,13 @@ Versions use [Semantic Versioning](https://semver.org/).
 * **salience:** close the advise-vs-execute refusal gap; record the corpus review ledger ([#63](https://github.com/rubicon/ai-skills/issues/63)) ([22601e6](https://github.com/rubicon/ai-skills/commit/22601e65429613557adab3bba8e69cdc312545be)), closes [#61](https://github.com/rubicon/ai-skills/issues/61)
 * **salience:** read declared corpus authority; add fact subject and visibility ([#32](https://github.com/rubicon/ai-skills/issues/32)) ([bf7d6e3](https://github.com/rubicon/ai-skills/commit/bf7d6e31e6b5190885789cc01064595658c3fc19)), closes [#31](https://github.com/rubicon/ai-skills/issues/31)
 
+### Added
+
+- `scripts/check-no-personal-data.sh` and its test suite — CI now fails when installed content under
+  `skills/` or `plugins/` carries a contributor's absolute home path or a real email address. Wired
+  into the existing `validate-skills` job, so it is enforced on every PR. Root governance files stay
+  out of scope, since a maintainer contact address in `CODE_OF_CONDUCT.md` is deliberate.
+
 ## [1.1.1](https://github.com/rubicon/ai-skills/compare/v1.1.0...v1.1.1) (2026-09-02)
 
 
@@ -77,34 +93,8 @@ Versions use [Semantic Versioning](https://semver.org/).
 * parse SKILL.md frontmatter as YAML, pin actions, polish docs ([#10](https://github.com/rubicon/ai-skills/issues/10)) ([3408699](https://github.com/rubicon/ai-skills/commit/34086995ae1e44b147eb112aab99d045af84d2a1))
 * restore canonical contents overwritten by mirror snapshot, port cache-money ([#7](https://github.com/rubicon/ai-skills/issues/7)) ([4c32275](https://github.com/rubicon/ai-skills/commit/4c32275c02459353e56f7ee365e7f1f166284b97)), closes [#6](https://github.com/rubicon/ai-skills/issues/6)
 
-## [Unreleased]
-
 ### Added
 
-- `anger-translator` skill (v0.1.0): rewrites a heated draft into a firm, professional message that keeps every fact, the ask, and any consequence the user stated, removes the heat, and flags political or legal risk. Inspired by the *Key & Peele* anger translator sketches, run in reverse
-- `pitstop` Facts section: an optional fifth configuration section that lets `checkpoint` keep a fact store current, looking up each fact the session confirmed before replacing a changed value or adding a new one, and skipping unconfirmed, multi-valued, or conflicting facts. Off by default
-- `loadout` plugin (v0.1.0): per-project plugin and skill audit with an approval stop, applied to `.claude/settings.local.json` and verified against fresh headless sessions by a tested script
-- `second-look` skill (v0.1.0): an intent-first review by a fresh agent, driven by a required packet of the original ask, later changes, final requirements, and deferrals, with `/code-review` run alongside and findings tagged `[intent]` or `[bugs]`. Adapted from OpenChamber's `/handoff-review` and `/workspace-review` magic prompts (https://github.com/openchamber/openchamber, MIT)
-- `grand-tour` skill (v0.1.0): a five-part onboarding tour of a codebase with one real flow traced through named files, using a code-graph index when one exists. Adapted from OpenChamber's `/explore` magic prompt (https://github.com/openchamber/openchamber, MIT)
-- `goalpost` skill (v0.1.0): writes a Claude Code `/goal` line with an observable outcome, evidence shown in the conversation, constraints, and an escape clause, so an impossible goal stops instead of looping. Adapted from OpenChamber's `/craft-goal` magic prompt (https://github.com/openchamber/openchamber, MIT)
-- `showdown` skill (v0.1.0): compares two or three genuinely distinct approaches to a known goal in one fixed-column table, picks one argued from the goal, and names the condition that would flip it; no plan, no code. Adapted from OpenChamber's `/weigh` magic prompt (https://github.com/openchamber/openchamber, MIT)
-- `pitstop` `catch-up` skill: a two-to-three-sentence "where was I" on the current branch, read from the uncommitted diff, the branch's commits and PR, and the handoff checked against git. Inspired by OpenChamber's `/catch-up` magic prompt (https://github.com/openchamber/openchamber, MIT)
-- `pitstop` plugin (v0.1.0): save what a compact or clear would destroy, then rebuild status after it. Four skills (`park`, `sitrep`, `checkpoint`, `setup`) and a tested verifier that fails a handoff naming a missing path, line, or commit, or a draft that was described but never saved
-- `relocate-session` skill (v1.0.0) — relocate a Claude Code session, or a whole project
-  directory, without silently orphaning auto-memory: memory is keyed to the git repository
-  root, a copy/move disposition asked on every run and defaulting to copy, a bundled
-  `scripts/carry-memory.sh` that copies with checksum verification and merges the `MEMORY.md`
-  index without duplicating entries, and a report of what does and does not follow the move
-- `codebase-memory` skill (v1.0.0) — query a codebase knowledge graph via MCP instead of grep: decision
-  matrix, exploration/tracing workflows, tiered evidence standards, and the full tool/edge-type reference
-- `scripts/check-no-personal-data.sh` and its test suite — CI now fails when installed content under
-  `skills/` or `plugins/` carries a contributor's absolute home path or a real email address. Wired
-  into the existing `validate-skills` job, so it is enforced on every PR. Root governance files stay
-  out of scope, since a maintainer contact address in `CODE_OF_CONDUCT.md` is deliberate.
-
- `salience` plugin (v0.2.0) — unified LinkedIn executive presence system: 12 modules behind one entry point (profile intelligence, identity/fact ledger, positioning, voice, content, engagement, executive career, consulting, data import, analytics, governance), a private out-of-repo data store, 8 templates, 4 adapter docs, 5 commands, career-corpus directory ingestion, and a 33-case evaluation suite
-- `session-messaging` plugin (v0.1.0) — cross-session messaging for Claude Code Desktop (CCD): a bundled skill covering `mcp__ccd_session_mgmt__send_message` addressing and session self-identification, plus two commands (`session-whoami`, `session-send`)
-- `rubicon-marketing-board` plugin listed as an external GitHub source (pinned to `v0.1.1`) — first marketplace entry sourced from a separate repo rather than vendored under `plugins/`
 - `cache-money` skill (v1.1.0) — Claude Code token/context-management practices for cheaper, sharper sessions
 - `identity-theft` skill (v0.1.0) — multi-personality text converter that rewrites text in a fictional character's voice
 - `backup-before-troubleshooting` plugin (v0.1.0) — a recoverable, self-documenting troubleshooting discipline: a bundled skill (single source of truth for the safety rules), three lifecycle commands (`new-recovery-effort`, `recovery-status`, gated `cleanup`), and one seeding script; first plugin in the new `plugins/` tree
@@ -114,15 +104,18 @@ Versions use [Semantic Versioning](https://semver.org/).
 - GitHub-mirror publish tooling: `scripts/sync-github-mirror.sh` (public snapshot publish) and an operations runbook
 
 ### Changed
+
 - Set the repository display name to `Rubicon AI Skills` in the README
 - Documented skillshare install commands in the README
 - Simplified the GitHub-mirror tooling to a plain allowlist snapshot — this repo now publishes all of its skills, so per-skill privacy filtering is no longer needed
 - CI: capped both jobs at `timeout-minutes: 5` so a hung Forgejo runner fails fast instead of after the ~15-minute default
 
 ### Removed
+
 - Relocated a non-public skill into a new private repository (`ai-skills-private`); this repository now contains only publishable skills
 
 ### Fixed
+
 - CI: resolved intermittent hangs on the self-hosted Forgejo Actions runner where trivial jobs could stall until the workflow timeout despite identical content passing on other runs; root cause was a runner-to-server connectivity issue in CI infrastructure, fixed at the runner level with no changes to any skill, workflow, or repo file
 
 ## [1.0.0] - 2026-06-18
