@@ -28,7 +28,7 @@ skillshare install github.com/rubicon/ai-skills -s relocate-session
 skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memoir
 
 # Every skill published here
-skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memoir,goalpost,grand-tour,identity-theft,relocate-session,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
+skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memoir,codex-review,goalpost,grand-tour,identity-theft,relocate-session,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
 ```
 
 ## Skills
@@ -47,6 +47,7 @@ skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,
 | [goalpost](skills/goalpost/SKILL.md) | Write a Claude Code `/goal` line a long unattended run can finish — observable outcome, evidence shown in the conversation, constraints, and an escape clause so an impossible goal stops instead of looping |
 | [showdown](skills/showdown/SKILL.md) | Put two or three genuinely different approaches head to head on the same terms, pick one argued from the goal, and name what would flip it — a decision, not a plan |
 | [anger-translator](skills/anger-translator/SKILL.md) | Turn a heated draft into a firm, professional message you can send at work — keeps the facts, the ask, and the consequences you stated; removes the heat; flags the political risk |
+| [codex-review](skills/codex-review/SKILL.md) | Get an independent code review from the Codex CLI: review a branch, uncommitted work, or one commit with invocations that work, and report the findings as advisory |
 
 ## Plugins
 
