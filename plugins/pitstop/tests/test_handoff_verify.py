@@ -1388,7 +1388,7 @@ class ClaimDriftReftable(ClaimDrift):
     prefetch_counts = True  # refs/prefetch lives in the same table stack as every other ref
     pruned_loose_remote_ref_is_seen = True  # every deletion writes a new table
     up_to_date_pull_counts = True  # ORIG_HEAD is a ref here, and pull rewrites it when it differs
-    gc_without_reflogs_counts = False  # with no reflog records to expire, gc has nothing to rewrite
+    gc_without_reflogs_counts = False  # with one table and no reflog records, gc has nothing to rewrite
 
 
 class HandoffStampCheck(unittest.TestCase):

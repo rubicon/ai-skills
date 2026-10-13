@@ -45,20 +45,21 @@ Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .rem
                 Limits: a commit made in the handoff's own second is not counted as a commit,
                 though one made after the handoff still shows as refs moved. Some writes print
                 "refs moved" with no ref moved: git gc (on the reftable backend, when the stack
-                holds reflog records, even if core.logAllRefUpdates is now off), git pack-refs and
-                the pack-refs task of git maintenance (on reftable, when the stack holds more than
-                one table), git reflog expire, a switch or checkout of the branch already checked
-                out, git reset with no target, an update-ref to the value the ref has, git bisect
-                start then reset, git remote set-head --auto that changes nothing, a fetch that
-                creates refs/remotes/<name>/HEAD, a fetch when remote.<name>.followRemoteHEAD is
-                "always", git worktree repair when worktree.useRelativePaths is true, a maintenance
-                prefetch that writes refs/prefetch (the first in a repo, and on the reftable
-                backend any later one that brings a new commit), and, on reftable, an up-to-date
-                pull or merge whenever ORIG_HEAD is absent or differs from HEAD. Not seen: removing
-                the last linked worktree; on the files backend with core.logAllRefUpdates off, a
-                loose remote-tracking ref that is deleted, as by fetch --prune; and a ref changed
-                through a symlinked ref directory. An unreadable ref directory is neither searched
-                nor dated.
+                holds reflog records, even if core.logAllRefUpdates is now off, or more than one
+                table), git pack-refs and the pack-refs task of git maintenance (on reftable, when
+                the stack holds more than one table), git reflog expire, a switch or checkout of
+                the branch already checked out, git reset with no target, an update-ref to the
+                value the ref has, git bisect start then reset, git remote set-head --auto that
+                changes nothing, a fetch that creates refs/remotes/<name>/HEAD, a fetch when
+                remote.<name>.followRemoteHEAD is "always", git worktree repair when
+                worktree.useRelativePaths is true, a maintenance prefetch that writes
+                refs/prefetch (the first in a repo, and on the reftable backend a later one that
+                adds a ref there), and, on reftable, an up-to-date pull or merge whenever
+                ORIG_HEAD is absent or differs from HEAD. Not seen: removing the last linked
+                worktree; on the files backend with core.logAllRefUpdates off, a loose
+                remote-tracking ref that is deleted, as by fetch --prune; and a ref changed
+                through a symlinked ref directory when no reflog records it. An unreadable ref
+                directory is neither searched nor dated.
                 Edits to journal.md and to files in drafts/
                 beside the handoff are skipped whoever makes them, so with handoff_path:
                 docs/remember.md, edits to a tracked docs/journal.md are not counted; deleting the
