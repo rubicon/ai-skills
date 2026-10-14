@@ -995,6 +995,117 @@ class TestBuild7Nits(ShellCase):
                 self.assertAllowed(self.hook(payload))
 
 
+class TestBuild8(ShellCase):
+    """Hub review of build 7: false denials of ordinary work, and gaps in the new curl and wrapper coverage."""
+
+    H = "~/.claude/hooks/outbound-comment-review-gate"
+    NONE = {"OUTBOUND_GATE_OWNED": "none/*"}
+    GH = f"https://api.github.com/repos/{TP}/issues/1/comments"
+
+    def test_naming_the_helper_among_other_operands_is_not_running_it(self):
+        h = self.H
+        for command in (f"git add {h} tests/t.py", f"git diff a b -- {h} README.md", f"git commit -m x {h} tests/t.py",
+                        f"chmod +x {h} tests/t.py", f"sed -n 1,10p {h} tests/t.py",
+                        f"python3 -m py_compile {h} tests/t.py"):
+            with self.subTest(command):
+                self.assertAllowed(self.shell(command))
+
+    def test_wrappers_that_execute_the_helper_still_count(self):
+        h, f = self.H, "--repo a/b --body x --verdict go --findings 0"
+        for command in (f"timeout 5 {h} $'rec''ord' {f}", f"python3 {h} $R {f}", f"nohup {h} $R {f}",
+                        f"sudo -u x {h} $R {f}", f"find . -exec {h} $R {f} \\;"):
+            with self.subTest(command):
+                self.assertDenied(self.shell(command))
+                self.assertAllowed(self.shell(command, agent=True))
+
+    def test_copying_the_helper_is_denied_for_the_main_thread_only(self):
+        self.assertDenied(self.shell(f"cp {self.H} /tmp/x-copy"))
+        self.assertAllowed(self.shell(f"cp {self.H} /tmp/x-copy", agent=True))
+        self.assertAllowed(self.shell("cp tests/a.py /tmp/x-copy"))
+
+    def test_local_and_unrelated_apis_pass_while_the_configured_hosts_are_gated(self):
+        for command in ("curl -X POST http://localhost:3000/api/v1/login -d x",
+                        "curl -X POST https://example.com/graphql -d '{}'",
+                        "curl -s -d '{\"q\":1}' http://localhost:4000/graphql"):
+            with self.subTest(command):
+                self.assertAllowed(self.bash(command, env=self.NONE))
+        forgejo = {"OUTBOUND_GATE_OWNED": "none/*", "OUTBOUND_GATE_FORGEJO_HOST": "git.example.test"}
+        self.assertDenied(self.bash("curl -X POST https://git.example.test/api/v1/user -d x", env=forgejo))
+        self.assertDenied(self.bash("curl -X POST https://api.github.com/graphql -d x", env=self.NONE))
+        owned_host = {"OUTBOUND_GATE_OWNED": "git.mine.test/*"}
+        self.assertDenied(self.bash("curl -X POST https://git.mine.test/api/v1/user -d x", env=owned_host))
+
+    def test_a_scheme_cannot_hide_a_variable_host(self):
+        self.assertDenied(self.bash('curl -d x "https://$H/$P"', env=self.NONE))
+
+    def test_curl_and_wget_behind_exec_wrappers_are_gated(self):
+        for command in (f"timeout 5 curl -d x {self.GH}", f"nohup curl -d x {self.GH}", f"sudo curl -d x {self.GH}",
+                        f"env -u X curl -d x {self.GH}", f"exec curl -d x {self.GH}",
+                        f"echo u | xargs curl -d x {self.GH}", f"nice wget --post-data=x {self.GH}"):
+            with self.subTest(command):
+                self.assertDenied(self.bash(command, env=self.NONE))
+
+    def test_git_aliases_and_the_equals_form_of_rebase_exec_are_scanned(self):
+        post = f"gh pr comment 7 -R {TP} --body x"
+        self.assertDenied(self.bash(f"git -c alias.p='!gh' p pr comment 7 -R {TP} --body x"))
+        self.assertDenied(self.bash(f"git rebase --exec='{post}' HEAD~1"))
+        self.assertAllowed(self.bash("git -c alias.p='!echo' p hello"))
+
+    def test_graphql_survives_trailing_slashes_escaped_quotes_and_bare_cr_comments(self):
+        text = 'addComment(input:{subjectId:"X", body:"y"}){id}'
+        queries = {
+            "block_string": 'mutation { resolveReviewThread(input:{threadId:"""a\\"""b"""}){id} ' + text + ' }',
+            "cr_comment": 'mutation { resolveReviewThread(input:{threadId:"t"}){id} #c\r' + text + ' }',
+        }
+        for name, query in queries.items():
+            with self.subTest(name):
+                (self.work / "q.graphql").write_text(query)
+                self.assertDenied(self.bash(f"gh api graphql -F query=@{self.work}/q.graphql", env=self.NONE))
+        mutation = 'mutation { addComment(input:{subjectId:"X", body:"y"}) { clientMutationId } }'
+        for endpoint in ("graphql/", "/graphql/"):
+            with self.subTest(endpoint):
+                self.assertDenied(self.bash(f"gh api {endpoint} -f query='{mutation}'", env=self.NONE))
+
+    def test_dot_segments_are_checked_before_a_variable_endpoint_is_accepted(self):
+        own = {"OUTBOUND_GATE_OWNED": "github.com/myorg/*"}
+        self.assertDenied(self.bash('gh api -X PUT "repos/myorg/../otherorg/x/$K"', env=own))
+
+    def test_a_variable_repo_needs_a_whole_owner_pattern(self):
+        partial = {"OUTBOUND_GATE_OWNED": "github.com/myorg/tools-*"}
+        self.assertDenied(self.bash('gh api -X PUT "repos/myorg/$r/automated-security-fixes"', env=partial))
+
+    def test_reply_targets_and_review_comment_positions_are_part_of_the_scope(self):
+        a = self.scope(f"gh api -X POST repos/{TP}/pulls/5/comments -F in_reply_to=5 -f body=x")
+        b = self.scope(f"gh api -X POST repos/{TP}/pulls/5/comments -F in_reply_to=6 -f body=x")
+        self.assertNotEqual(a["target"], b["target"])
+        base = dict(owner="otherorg", repo="widgets", pullNumber=5, body="B")
+        one = self.scope(tool="mcp__github__add_comment_to_pending_review", tool_input=dict(base, path="a.py", line=3))
+        two = self.scope(tool="mcp__github__add_comment_to_pending_review", tool_input=dict(base, path="a.py", line=4))
+        self.assertNotEqual(one["target"], two["target"])
+
+    def test_a_later_go_record_for_the_same_post_resets_its_disposition(self):
+        key = self.record(body="hi")
+        self.assertAllowed(self.bash(f"gh pr comment 7 -R {TP} --body hi"))
+        r = self.run_gate(["record", "--repo", TP, *SCOPE, "--body", "hi", "--reviewer-model", "opus", "--verdict", "go",
+                           "--findings", "1"])
+        self.assertEqual(r.stdout.strip(), key)
+        self.assertDenied(self.bash(f"gh pr comment 7 -R {TP} --body hi"))
+
+    def test_the_analysis_budget_fails_closed_for_gated_commands_only(self):
+        owned_post = "echo a; echo b; gh pr comment 7 -R myorg/x --body x"
+        self.assertAllowed(self.bash(owned_post))
+        slow = {"OUTBOUND_GATE_BUDGET": "0.000001"}
+        self.assertDenied(self.bash(owned_post, env=slow))
+        self.assertAllowed(self.bash("echo a; echo b; ls; ls; pwd", env=slow))
+
+    def scope(self, command=None, **mcp):
+        if command is not None:
+            reason = self.assertDenied(self.bash(command, env=self.NONE))
+        else:
+            reason = self.assertDenied(self.mcp(mcp["tool"], mcp["tool_input"], env=self.NONE))
+        return scope_of(reason)
+
+
 class TestHelperRobustness(GateCase):
     """Fourth review: the helper must fail with a parser error, never a traceback or a hang."""
 

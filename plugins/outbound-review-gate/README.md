@@ -29,8 +29,8 @@ Set them in the `env` block of `settings.json` so the hook and the helper comman
 
 ## What it gates
 
-- Shell tools (`Bash`, `Monitor`, `mcp__terminal__run_in_terminal`): `gh pr` and `gh issue` comment, review, create, edit, close, reopen, merge and revert; `gh discussion` equivalents; `gh api` writes to issue, pull, comment, review and dismissal endpoints. `gh` is found anywhere in a command, including `if` and `for` bodies, `$( )`, process substitution, variables and functions, and inside a string handed to `bash -c`, `eval`, `env -S`, `watch`, `tmux`, `script -c`, `ssh`, `osascript -e`, `git -c alias.x='!...'`, `git rebase --exec` and `vim -c '!...'`. Other programs that run a string as a shell command are not rescanned, and `python3 -c` is denied only when it spells out a `gh pr` or `gh issue` call.
-- `curl` and `wget` calls to `api.github.com`, a GitHub Enterprise `/api/v3` or a Forgejo `/api/v1` endpoint that are write-shaped (an explicit or implied POST, PATCH or PUT, or any data flag such as `-d`, `--data*`, `--json`, `-F`, `-T`, `--post-data`, `--post-file`). The repo comes from the URL and a repo that is not owned is denied, with no receipt possible because the body cannot be reviewed; use `gh` or the MCP tools instead. A URL built from a variable is denied unless its host is spelled out and is not an API host. Reads, and curl or wget to any other host, pass.
+- Shell tools (`Bash`, `Monitor`, `mcp__terminal__run_in_terminal`): `gh pr` and `gh issue` comment, review, create, edit, close, reopen, merge and revert; `gh discussion` equivalents; `gh api` writes to issue, pull, comment, review and dismissal endpoints. `gh` is found anywhere in a command, including `if` and `for` bodies, `$( )`, process substitution, variables, and functions that pass their arguments to `gh` (`c() { gh "$@"; }`), and inside a string handed to `bash -c`, `eval`, `env -S`, `watch`, `tmux`, `script -c`, `ssh`, `osascript -e`, `git -c alias.x='!...'`, `git rebase --exec` and `vim -c '!...'`. Other programs that run a string as a shell command are not rescanned, and `python3 -c` is denied only when it spells out a `gh pr` or `gh issue` call.
+- `curl` and `wget` calls (also behind `timeout`, `nohup`, `sudo`, `env`, `exec`, `xargs` and similar wrappers) to `api.github.com`, a GitHub Enterprise `/api/v3/repos/...` or a Forgejo `/api/v1/repos/...` endpoint, or to `/api` or `/graphql` on a host that is GitHub, `GH_HOST`, `OUTBOUND_GATE_FORGEJO_HOST` or named in `OUTBOUND_GATE_OWNED`, that are write-shaped (an explicit or implied POST, PATCH or PUT, or any data flag such as `-d`, `--data*`, `--json`, `-F`, `-T`, `--post-data`, `--post-file`). The repo comes from the URL and a repo that is not owned is denied, with no receipt possible because the body cannot be reviewed; use `gh` or the MCP tools instead. A URL built from a variable is denied unless its host is spelled out and is not an API host. Reads, and curl or wget to any other host, pass.
 - AppleScript `do shell script` that contains a gated `gh` call.
 - GitHub and Forgejo MCP write tools: `add_issue_comment`, `add_reply_to_pull_request_comment`, `add_comment_to_pending_review`, `create_pull_request`, `issue_write`, `pull_request_review_write`, `update_issue_comment`, `update_pull_request`, `merge_pull_request`, `create_issue`, `create_issue_comment`, `create_pull_request_review`, `edit_issue`, `edit_issue_comment`, `edit_pull_request`.
 - `Write`, `Edit`, `MultiEdit` and `NotebookEdit` aimed at the receipt directory.
@@ -41,7 +41,7 @@ The target repo is resolved from `-R/--repo`, a URL argument, `GH_REPO`, then th
 
 Text the hook cannot hash is denied on third-party repos, because no receipt can vouch for it: bodies built by the shell (`$(...)`, `$VAR`, backticks, `$'...'`), `--body-file -` or any stdin, a file that is missing, not a regular file or over 1 MiB, `--editor`, `--fill`, `--template`, a flag the hook does not know, and commands over 256 KiB. Write the text to a file in one command, then post with `--body-file <literal path>` in the next.
 
-GraphQL mutations that may carry text (`gh api graphql`, or any endpoint path ending in `/graphql`, with `addComment` and similar) are always denied, on owned repositories too, because their text cannot be hashed and no receipt can unlock them. Use `gh pr comment`, `gh issue comment` or a REST endpoint instead. Mutations known to carry no text (labels, reactions, thread resolution, project moves) pass.
+GraphQL mutations that may carry text (`gh api graphql`, or any endpoint path ending in `/graphql`, with `addComment` and similar) are denied, on owned repositories too, because their text cannot be hashed and no receipt can unlock them. Use `gh pr comment`, `gh issue comment` or a REST endpoint instead. Mutations known to carry no text (labels, reactions, thread resolution, project moves) pass.
 
 ## The receipt
 
@@ -52,7 +52,7 @@ A receipt is a JSON file named by the sha256 of the list `[repo, action, target,
 - `target` is the PR or issue number (also taken from a URL), a branch name, the REST path for `gh api`, the MCP tool's number and id fields joined with `/` (a reply to comment 99 on PR 5 is `5/99`), or empty when the call has none (a create, or a command that relies on the current branch).
 - Title and body are right-stripped.
 
-So a review of a reply for one thread does not unlock the same text on another PR or issue, on another comment, as a merge message, or in another repo. A receipt is reusable: it never expires, and it stops counting only when a later `record` for the same scope and text says `no-go`. It counts only when its verdict is `go`, it is marked dispositioned, it names a reviewer model, and its inner hash matches its file name.
+So a review of a reply for one thread does not unlock the same text on another PR or issue, on another comment (a `gh api` reply is keyed on its `in_reply_to`, an MCP review comment on its path and line), as a merge message, or in another repo. A receipt is reusable: it never expires. A later `record` for the same scope and text replaces it, so a `no-go` revokes it and a new `go` must be dispositioned again. It counts only when its verdict is `go`, it is marked dispositioned, it names a reviewer model, and its inner hash matches its file name.
 
 A denial prints the exact scope the receipt must name, as `scope={"repo": ..., "action": ..., "target": ...}`, so you never have to guess the host or the action. Recording takes two steps by two different actors:
 
@@ -76,9 +76,11 @@ Self-approval is still possible, and the gate only makes it a visible, deliberat
 - A subagent can run `disposition` as well as `record`, so one subagent can complete both steps if it is briefed to.
 - A session can name the receipt directory with a glob, or build its path at run time.
 
-A MCP tool is matched by its `owner` and `repo` arguments. A server that is not named GitHub or Forgejo and takes `owner`/`repo` is treated as GitHub, so a different service that reuses those argument names can collide with an owned `github.com/<owner>/*` pattern.
+A MCP tool is matched by its `owner` and `repo` arguments. A server that is not named GitHub or Forgejo but takes `owner` and `repo` is treated as unresolvable and always denied, so it cannot borrow an owned `github.com/<owner>/*` pattern.
 
 A shell function counts as a `gh` alias when `gh` appears between its opening and the first `}`, so a `gh` call after a nested `}` in the same function body is missed.
+
+Analysis is cut off after 6 seconds (`OUTBOUND_GATE_BUDGET` overrides this for tests): a command that mentions a gated post is then denied, any other command passes.
 
 Keep the matcher in `hooks/hooks.json` in step with any new shell-running or GitHub write tool, or the hook never sees it.
 
