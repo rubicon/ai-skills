@@ -5,6 +5,14 @@ All notable changes to this plugin are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [0.3.3](https://github.com/rubicon/ai-skills/compare/pitstop-v0.3.2...pitstop-v0.3.3) (2026-10-14)
+
+
+### Bug Fixes
+
+* **pitstop:** count ref moves onto older commits as drift ([#142](https://github.com/rubicon/ai-skills/issues/142)) ([f3056f5](https://github.com/rubicon/ai-skills/commit/f3056f5e4d337f4b144ca50b8eddac7798b2b50c))
+* **pitstop:** describe every drift form and what none means ([#143](https://github.com/rubicon/ai-skills/issues/143)) ([659d19f](https://github.com/rubicon/ai-skills/commit/659d19f98035f2f650a5b3b07094d1e0dd8b37d9))
+
 ## [0.3.2](https://github.com/rubicon/ai-skills/compare/pitstop-v0.3.1...pitstop-v0.3.2) (2026-10-12)
 
 
