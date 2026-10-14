@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.1.0](https://github.com/rubicon/ai-skills/compare/v2.0.0...v2.1.0) (2026-10-14)
+
+
+### Features
+
+* add right-stuff-guard, a hook that denies malformed AskUserQuestion markers ([#157](https://github.com/rubicon/ai-skills/issues/157)) ([8c80f7b](https://github.com/rubicon/ai-skills/commit/8c80f7bb3a2c20844addb23bc6240684b363f6ae))
+
 ## [2.0.0](https://github.com/rubicon/ai-skills/compare/v1.4.2...v2.0.0) (2026-10-14)
 
 
