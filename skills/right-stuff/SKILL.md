@@ -34,7 +34,7 @@ A label ends in one of exactly four ways:
 
 Approvals get markers too: `Merge the PR now (Recommended)` / `Wait for the second review (Right Thing)`.
 
-A fact question asks for something only the user knows: offer the real values you found, such as `staging database (Right Thing)` / `production database`, and anything else goes into "Other". Never invent a value. With fewer than two real values, ask a decision question over the actions open to you, such as `Wait for the value (Right Thing)` / `Search the repo for it`. An option that names an action, such as pushing to both hosts, makes it a decision question. A fact answer supplies data only; it approves nothing the user's request had not already approved.
+A fact question asks for something only the user knows: offer the real values you found, such as `staging database (Right Thing)` / `production database`, and anything else goes into "Other". Never invent a value. With fewer than two real values, ask a decision question over the actions open to you, such as `Wait for the value (Right Thing)` / `Continue without it`. An option that names an action, such as pushing to both hosts, makes it a decision question. A fact answer supplies data only; it approves nothing the user's request had not already approved.
 
 ## Building each question
 
