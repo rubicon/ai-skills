@@ -47,6 +47,15 @@ jobs:
       - name: loadout script test suite
         run: python3 plugins/loadout/tests/test_loadout.py
 
+  outbound-review-gate-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: outbound-review-gate test suite
+        run: python3 -m unittest discover -s plugins/outbound-review-gate/tests
+
   validate-gates:
     runs-on: ubuntu-latest
     timeout-minutes: 5

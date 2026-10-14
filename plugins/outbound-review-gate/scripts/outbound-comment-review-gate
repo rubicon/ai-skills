@@ -1,0 +1,1430 @@
+#!/usr/bin/env python3
+"""Claude Code PreToolUse gate for outbound text on third-party repos.
+
+Standing rule: before anything is posted, edited or opened on a repo outside
+the user's own, a fresh adversarial reviewer checks the exact text and every
+finding is dispositioned. This hook denies the post unless a review receipt for
+that exact text and repo exists.
+
+Two modes, one file, stdlib only:
+
+  (no arguments)   Hook mode. Reads the PreToolUse JSON on stdin. Prints a deny
+                   decision, or nothing (no decision; the normal permission flow
+                   runs). Always exits 0.
+  record           Run by the reviewing SUBAGENT as the last step of its
+                   review: writes a receipt for one repo and the exact text.
+                   The hook refuses this command from the main thread.
+  disposition      Run by the hub after every finding is applied or rejected
+                   with a reason: marks the receipt dispositioned.
+  hash             Prints the receipt key without writing anything.
+
+Receipt key: sha256 of the JSON list [repo, title, body], the repo as
+host/owner/repo in lowercase and title and body right-stripped. The receipt
+lives in OUTBOUND_REVIEW_DIR, default ~/.claude/state/outbound-review, as
+<sha256>.json. A receipt counts only when its verdict is go, it is marked
+dispositioned, it names a reviewer model and its inner hash matches its name.
+The hook also refuses to let any tool write into that directory by hand.
+
+Repos matching OUTBOUND_GATE_OWNED (comma-separated fnmatch patterns on
+host/owner/repo, empty by default, so nothing is exempt until it is set) are
+exempt. The Forgejo MCP tools post to the host named by OUTBOUND_GATE_FORGEJO_HOST
+(default "forgejo"). A repo that cannot be resolved to
+exactly one repo is treated as third-party and cannot be unlocked: name it with
+-R. A post whose text cannot be hashed (built by the shell, read from stdin, an
+unreadable or oversized file, a flag this script does not know) is denied on a
+third-party repo, because no receipt can vouch for it.
+
+Covered: gh pr/issue/discussion comment, review, create/new, edit, close,
+reopen, merge, revert; gh api writes to issue, pull, comment, review and
+dismissal endpoints and GraphQL mutations that may carry text; the GitHub and
+Forgejo MCP write tools in MCP_FIELDS; any tool whose `command` input is a
+shell line (Bash, Monitor, run_in_terminal); AppleScript `do shell script`.
+
+Not covered, by design: git push and commit messages, releases, gists, curl or
+scripts that call the API directly, a script file or stdin script that contains
+the gh call, a command that rewrites the body file after this hook has read it,
+text typed through a browser or desktop automation, and a subagent that records
+a receipt it did not earn. The gate stops forgetting and casual self-approval;
+it is not a sandbox.
+"""
+
+import fnmatch
+import functools
+import hashlib
+import json
+import os
+import re
+import shlex
+import stat
+import sys
+from collections import namedtuple
+
+DEFAULT_OWNED = ""
+DEFAULT_RECEIPT_DIR = "~/.claude/state/outbound-review"
+DEFAULT_FORGEJO_HOST = "forgejo"
+MAX_COMMAND = 256 * 1024
+MAX_TEXT = 1024 * 1024
+MAX_DEPTH = 4
+
+Post = namedtuple("Post", "repos title body problem guard", defaults=(None,))
+
+
+class Unverifiable(Exception):
+    pass
+
+
+class Ctx:
+    """Shell state that carries along a command line: cwd, whether a cd has run, exported gh variables."""
+
+    def __init__(self, cwd, agent=False):
+        self.cwd = cwd
+        self.agent = agent
+        self.moved = False
+        self.mentions_gated = False
+        self.text = ""
+        self.aliases = set()
+        self.vars = {}
+        self.autoexport = False
+        self.env = {k: os.environ[k] for k in ("GH_REPO", "GH_HOST") if os.environ.get(k)}
+
+
+# --------------------------------------------------------------------------
+# Receipts
+# --------------------------------------------------------------------------
+def canonical(title, body):
+    """The text being posted, or "" when there is none."""
+    parts = [(title or "").rstrip(), (body or "").rstrip()]
+    return json.dumps(parts, ensure_ascii=False) if any(parts) else ""
+
+
+def digest(repo, title, body):
+    """Receipt key: the repo plus the text, so a review only vouches for the repo it was run against."""
+    text = json.dumps([repo, (title or "").rstrip(), (body or "").rstrip()], ensure_ascii=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def receipt_dir():
+    return os.path.expanduser(os.environ.get("OUTBOUND_REVIEW_DIR") or DEFAULT_RECEIPT_DIR)
+
+
+def receipt_problem(key):
+    """Why the receipt for `key` does not count, or None when it does."""
+    path = os.path.join(receipt_dir(), key + ".json")
+    try:
+        st = os.stat(path)
+    except OSError:
+        return "no receipt on file"
+    try:
+        if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_TEXT:
+            return "the receipt is not a regular file of sane size"
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError, RecursionError):
+        return "the receipt is unreadable"
+    if not isinstance(data, dict):
+        return "the receipt is malformed"
+    if data.get("sha256") != key:
+        return "the receipt does not match its own hash"
+    if data.get("verdict") != "go":
+        return "the reviewer's verdict is not go"
+    if data.get("dispositioned") is not True:
+        return "the findings are not marked dispositioned (the hub runs the disposition command)"
+    model = data.get("reviewer_model")
+    if not isinstance(model, str) or not model.strip():
+        return "the receipt names no reviewer model"
+    return None
+
+
+# --------------------------------------------------------------------------
+# Repo identity
+# --------------------------------------------------------------------------
+NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+HOST_RE = re.compile(r"^[A-Za-z0-9.-]+(:\d+)?$")
+SELECTOR_URL_RE = re.compile(r"^https?://([^/\s]+)/([^/\s]+)/([^/\s]+)/(?:pull|issues)/\d+")
+
+
+def owned_patterns():
+    raw = os.environ.get("OUTBOUND_GATE_OWNED") or DEFAULT_OWNED
+    return [p.strip().lower() for p in raw.split(",") if p.strip()]
+
+
+def is_owned(repo):
+    return any(fnmatch.fnmatchcase(repo.lower(), pat) for pat in owned_patterns())
+
+
+def make_repo(host, owner, repo):
+    """'host/owner/repo' when every part is a plain name, else None (never matches an owned pattern)."""
+    repo = re.sub(r"\.git$", "", repo)
+    for name in (owner, repo):
+        if not NAME_RE.match(name) or name in (".", ".."):
+            return None
+    if not HOST_RE.match(host):
+        return None
+    return f"{host}/{owner}/{repo}".lower()
+
+
+def norm_repo(spec, default_host="github.com"):
+    """OWNER/REPO, HOST/OWNER/REPO or a URL -> 'host/owner/repo', else None."""
+    spec = spec.strip()
+    if re.match(r"^[a-z+]+://", spec) and not re.match(r"^https?://", spec) or re.match(r"^[^@/\s]+@[^:/\s]+:", spec):
+        found = remote_repo(spec)
+        return None if found.startswith("unparsed/") else found
+    m = re.match(r"^https?://([^/]+)/([^/]+)/([^/]+)", spec)
+    if m:
+        return make_repo(*m.groups())
+    parts = spec.split("/")
+    if len(parts) == 2:
+        return make_repo(default_host, *parts)
+    if len(parts) == 3:
+        return make_repo(*parts)
+    return None
+
+
+def remote_repo(url):
+    m = re.match(r"^[a-z+]+://(?:[^/@]+@)?([^/:]+)(?::\d+)?/([^/]+)/(.+)$", url)
+    if not m:
+        m = re.match(r"^(?:[^@/]+@)?([^:/]+):([^/]+)/(.+)$", url)
+    found = make_repo(*m.groups()) if m else None
+    return found or "unparsed/" + url
+
+
+def cwd_repos(ctx):
+    """Repos gh would act on from the cwd: the `gh repo set-default` remote if one is marked, else every remote."""
+    if ctx.moved:
+        return []
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["git", "-C", ctx.cwd or os.getcwd(), "config", "--get-regexp", r"^remote\..*\.(url|gh-resolved)$"],
+            capture_output=True, text=True, timeout=3,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if out.returncode != 0:
+        return []
+    urls, marked = {}, {}
+    for line in out.stdout.splitlines():
+        key, _, value = line.partition(" ")
+        name, _, kind = key[len("remote."):].rpartition(".")
+        (urls if kind == "url" else marked)[name] = value.strip()
+    for name, marker in marked.items():
+        if marker == "base" and name in urls:
+            return [remote_repo(urls[name])]
+        if "/" in marker and norm_repo(marker):
+            return [norm_repo(marker)]
+    return [remote_repo(url) for url in urls.values()]
+
+
+def default_host(ctx, env):
+    return env.get("GH_HOST") or "github.com"
+
+
+# --------------------------------------------------------------------------
+# Reading text out of a command
+# --------------------------------------------------------------------------
+# preprocess() hides characters that are literal inside single quotes behind
+# sentinels, so a later `$` or backtick in a token is always a real expansion.
+ANSI_C, SQ_DOLLAR, SQ_TICK = "\x01", "\x02", "\x03"
+
+
+def restore(value):
+    return value.replace(SQ_DOLLAR, "$").replace(SQ_TICK, "`")
+
+
+def check_inline(value):
+    if ANSI_C in value:
+        raise Unverifiable("the inline text uses $'...' quoting")
+    if "$" in value or "`" in value:
+        raise Unverifiable("the inline text contains $ or a backtick outside single quotes, so the shell may expand it")
+    return restore(value)
+
+
+def read_text(path, ctx):
+    if path == "-":
+        raise Unverifiable("the text is read from stdin")
+    if "$" in path or "`" in path or ANSI_C in path:
+        raise Unverifiable("the file path contains a shell expansion")
+    full = os.path.expanduser(restore(path))
+    if not os.path.isabs(full):
+        if ctx.moved:
+            raise Unverifiable("the command changes directory before reading a relative path")
+        full = os.path.join(ctx.cwd or os.getcwd(), full)
+    try:
+        st = os.stat(full)
+        if not stat.S_ISREG(st.st_mode):
+            raise Unverifiable(f"{path} is not a regular file")
+        if st.st_size > MAX_TEXT:
+            raise Unverifiable(f"{path} is larger than 1 MiB")
+        with open(full, "rb") as fh:
+            return fh.read(MAX_TEXT + 1).decode("utf-8", "replace")
+    except OSError:
+        raise Unverifiable(f"the file {path} cannot be read")
+
+
+# --------------------------------------------------------------------------
+# gh flag tables (checked against `gh <verb> --help` by the tests)
+# --------------------------------------------------------------------------
+# verb -> (flags that take a value, boolean flags); `--long/-s` gives the short form.
+FLAG_SPECS = {
+    "pr comment": ("--attach --body/-b --body-file/-F --repo/-R", "--create-if-none --delete-last --edit-last --editor/-e --web/-w --yes"),
+    "issue comment": ("--attach --body/-b --body-file/-F --repo/-R", "--create-if-none --delete-last --edit-last --editor/-e --web/-w --yes"),
+    "pr review": ("--body/-b --body-file/-F --repo/-R", "--approve/-a --comment/-c --request-changes/-r"),
+    "pr create": ("--assignee/-a --attach --base/-B --body/-b --body-file/-F --head/-H --label/-l --milestone/-m --project/-p --recover --reviewer/-r --template/-T --title/-t --repo/-R", "--draft/-d --dry-run --editor/-e --fill/-f --fill-first --fill-verbose --no-maintainer-edit --web/-w"),
+    "issue create": ("--assignee/-a --attach --blocked-by --blocking --body/-b --body-file/-F --label/-l --milestone/-m --parent --project/-p --recover --template/-T --title/-t --type --repo/-R", "--editor/-e --web/-w"),
+    "pr edit": ("--add-assignee --add-label --add-project --add-reviewer --attach --base/-B --body/-b --body-file/-F --milestone/-m --remove-assignee --remove-label --remove-project --remove-reviewer --title/-t --repo/-R", "--remove-milestone"),
+    "issue edit": ("--add-assignee --add-blocked-by --add-blocking --add-label --add-project --add-sub-issue --attach --body/-b --body-file/-F --milestone/-m --parent --remove-assignee --remove-blocked-by --remove-blocking --remove-label --remove-project --remove-sub-issue --title/-t --type --repo/-R", "--remove-milestone --remove-parent --remove-type"),
+    "pr close": ("--comment/-c --repo/-R", "--delete-branch/-d"),
+    "pr reopen": ("--comment/-c --repo/-R", ""),
+    "issue close": ("--comment/-c --duplicate-of --reason/-r --repo/-R", ""),
+    "issue reopen": ("--comment/-c --repo/-R", ""),
+    "pr merge": ("--author-email/-A --body/-b --body-file/-F --match-head-commit --subject/-t --repo/-R", "--admin --auto --delete-branch/-d --disable-auto --merge/-m --rebase/-r --squash/-s"),
+    "pr revert": ("--body/-b --body-file/-F --title/-t --repo/-R", "--draft/-d"),
+    "discussion create": ("--body/-b --body-file/-F --category/-c --label/-l --repo/-R --title/-t", ""),
+    "discussion comment": ("--body/-b --body-file/-F --repo/-R", "--delete --edit --yes"),
+    "discussion edit": ("--add-label --body/-b --body-file/-F --category/-c --remove-label --repo/-R --title/-t", ""),
+    "api": ("--cache --field/-F --header/-H --hostname --input --jq/-q --method/-X --preview/-p --raw-field/-f --template/-t", "--allow-escape-sequences --include/-i --paginate --silent --slurp --verbose"),
+}
+VERB_ALIASES = {"issue new": "issue create", "pr new": "pr create"}
+
+# verb -> (title flags, body flags, body-file flags, flags whose text lives outside the command, body required)
+EDITOR = ("--editor",)
+FILL = ("--editor", "--fill", "--fill-first", "--fill-verbose", "--template", "--recover")
+TEXT_SPECS = {
+    "pr comment": ((), ("--body",), ("--body-file",), EDITOR, True),
+    "issue comment": ((), ("--body",), ("--body-file",), EDITOR, True),
+    "pr review": ((), ("--body",), ("--body-file",), (), False),
+    "pr create": (("--title",), ("--body",), ("--body-file",), FILL, False),
+    "issue create": (("--title",), ("--body",), ("--body-file",), ("--editor", "--template", "--recover"), False),
+    "pr edit": (("--title",), ("--body",), ("--body-file",), (), False),
+    "issue edit": (("--title",), ("--body",), ("--body-file",), (), False),
+    "pr close": ((), ("--comment",), (), (), False),
+    "pr reopen": ((), ("--comment",), (), (), False),
+    "issue close": ((), ("--comment",), (), (), False),
+    "issue reopen": ((), ("--comment",), (), (), False),
+    "pr merge": (("--subject",), ("--body",), ("--body-file",), (), False),
+    "pr revert": (("--title",), ("--body",), ("--body-file",), (), False),
+    "discussion create": (("--title",), ("--body",), ("--body-file",), (), False),
+    "discussion comment": ((), ("--body",), ("--body-file",), (), True),
+    "discussion edit": (("--title",), ("--body",), ("--body-file",), (), False),
+}
+
+
+def set_bool(bools, name, value):
+    """Go's strconv.ParseBool, which is how pflag reads --flag=value on a boolean flag."""
+    if value in ("1", "t", "T", "TRUE", "true", "True"):
+        bools.add(name)
+    elif value in ("0", "f", "F", "FALSE", "false", "False"):
+        bools.discard(name)
+    else:
+        raise Unverifiable(f"{name}={value} is not a boolean")
+
+
+def parse_flags(key, args):
+    """pflag-conformant parse -> (values by long name, boolean flags set, positionals). Unknown flags fail closed."""
+    value_flags, bool_flags = FLAG_SPECS[key]
+    kinds, shorts = {"--help": "bool"}, {"h": "--help"}
+    for kind, spec in (("value", value_flags), ("bool", bool_flags)):
+        for item in spec.split():
+            long, _, short = item.partition("/")
+            kinds[long] = kind
+            if short:
+                shorts[short[1]] = long
+    values, bools, positional = {}, set(), []
+    i = 0
+    while i < len(args):
+        tok = args[i]
+        if tok == "--":
+            positional += args[i + 1:]
+            break
+        if tok.startswith("--"):
+            name, eq, val = tok.partition("=")
+            if name not in kinds:
+                raise Unverifiable(f"{name} is not a flag this gate knows")
+            if kinds[name] == "value":
+                if not eq:
+                    i += 1
+                    if i >= len(args):
+                        raise Unverifiable(f"{name} has no value")
+                    val = args[i]
+                values.setdefault(name, []).append(val)
+            else:
+                set_bool(bools, name, val if eq else "true")
+        elif tok.startswith("-") and len(tok) > 1:
+            j = 1
+            while j < len(tok):
+                name = shorts.get(tok[j])
+                if name is None:
+                    raise Unverifiable(f"-{tok[j]} is not a flag this gate knows")
+                rest = tok[j + 1:]
+                if kinds[name] == "bool":
+                    if rest.startswith("="):
+                        set_bool(bools, name, rest[1:])
+                        break
+                    bools.add(name)
+                    j += 1
+                    continue
+                if not rest:
+                    i += 1
+                    if i >= len(args):
+                        raise Unverifiable(f"-{tok[j]} has no value")
+                    rest = args[i]
+                values.setdefault(name, []).append(rest.removeprefix("="))
+                break
+        else:
+            positional.append(tok)
+        i += 1
+    return values, bools, positional
+
+
+# --------------------------------------------------------------------------
+# gh pr / gh issue
+# --------------------------------------------------------------------------
+def naive_repos(args, ctx, env):
+    """Best-effort repo when flags could not be parsed: the last -R/--repo value, else env, else cwd."""
+    found = None
+    for i, tok in enumerate(args):
+        if tok in ("-R", "--repo") and i + 1 < len(args):
+            found = args[i + 1]
+        elif tok.startswith("--repo="):
+            found = tok[7:]
+        elif tok.startswith("-R") and len(tok) > 2:
+            found = tok[2:]
+    spec = found or env.get("GH_REPO")
+    if spec:
+        repo = norm_repo(expand_vars(spec, ctx), default_host(ctx, env))
+        return [repo] if repo else []
+    return cwd_repos(ctx)
+
+
+def resolve_repos(values, positional, ctx, env):
+    host = default_host(ctx, env)
+    explicit = values.get("--repo")
+    selector = SELECTOR_URL_RE.match(positional[0]) if positional else None
+    from_url = make_repo(*selector.groups()) if selector else None
+    if explicit:
+        repo = norm_repo(expand_vars(explicit[-1], ctx), host)
+        if selector and repo != from_url:
+            raise Unverifiable("the URL argument and --repo name different repos")
+        return [repo] if repo else []
+    if selector:
+        return [from_url] if from_url else []
+    if env.get("GH_REPO"):
+        repo = norm_repo(env["GH_REPO"], host)
+        return [repo] if repo else []
+    return cwd_repos(ctx)
+
+
+def gh_command(args, ctx, env):
+    if not args:
+        return []
+    if args[0] == "api":
+        return gh_api(args[1:], ctx, env)
+    if args[0] not in ("pr", "issue", "discussion"):
+        return []
+    verb, rest, i = None, [], 1
+    while i < len(args):
+        tok = args[i]
+        if verb is None and not tok.startswith("-"):
+            verb = tok
+        elif verb is None and tok in ("-R", "--repo") and i + 1 < len(args):
+            rest += [tok, args[i + 1]]
+            i += 1
+        else:
+            rest.append(tok)
+        i += 1
+    key = f"{args[0]} {verb}"
+    key = VERB_ALIASES.get(key, key)
+    if key not in TEXT_SPECS:
+        return []
+    titles, bodies, files, outside, required = TEXT_SPECS[key]
+    try:
+        values, bools, positional = parse_flags(key, rest)
+    except Unverifiable as exc:
+        return [Post(naive_repos(rest, ctx, env), None, None, str(exc))]
+    try:
+        repos = resolve_repos(values, positional, ctx, env)
+    except Unverifiable as exc:
+        return [Post([], None, None, str(exc))]
+    try:
+        if "--web" in bools or "--help" in bools:
+            return []
+        for flag in outside:
+            if flag in values or flag in bools:
+                raise Unverifiable(f"{flag} takes its text from somewhere other than the command")
+        for flag in titles + bodies + files:
+            if len(set(values.get(flag, []))) > 1:
+                raise Unverifiable(f"{flag} is given more than once with different values")
+        title = next((check_inline(values[f][-1]) for f in titles if f in values), None)
+        inline = next((values[f][-1] for f in bodies if f in values), None)
+        filed = next((values[f][-1] for f in files if f in values), None)
+        if inline is not None and filed is not None:
+            raise Unverifiable("both inline text and a file were given")
+        body = None
+        if inline is not None:
+            body = check_inline(inline)
+        elif filed is not None:
+            body = read_text(filed, ctx)
+        elif required and not {"--delete-last", "--delete"} & bools:
+            raise Unverifiable("the comment has no --body or --body-file")
+        if not canonical(title, body):
+            return []
+        return [Post(repos, title, body, None)]
+    except Unverifiable as exc:
+        return [Post(repos, None, None, str(exc))]
+
+
+# --------------------------------------------------------------------------
+# gh api
+# --------------------------------------------------------------------------
+PROSE_KEYS = {"body": "body", "title": "title", "commit_message": "body", "commit_title": "title", "message": "body"}
+# A project field update carries text unless the value is a literal choice, iteration, number or date.
+PROJECT_CHOICE_RE = re.compile(r"\bvalue\s*:\s*\{\s*(?:singleSelectOptionId|iterationId|number|date)\s*:")
+SAFE_MUTATIONS = {
+    "resolvereviewthread", "unresolvereviewthread", "addlabelstolabelable", "removelabelsfromlabelable",
+    "markpullrequestreadyforreview", "convertpullrequesttodraft", "requestreviews", "addassigneestoassignable",
+    "removeassigneesfromassignable", "closeissue", "reopenissue", "closepullrequest", "reopenpullrequest",
+    "disablepullrequestautomerge", "addreaction", "removereaction", "addprojectv2itembyid", "deleteprojectv2item", "archiveprojectv2item", "unarchiveprojectv2item",
+    "updateprojectv2itemposition",
+}
+API_WRITE_HINT_RE = re.compile(r"\b(POST|PATCH|PUT)\b|--(raw-)?field|--input|(^| )-[A-Za-z]*[fF]", re.I)
+
+
+def api_text(values, ctx):
+    parts = {"title": [], "body": []}
+    plain = {}
+    for flag, typed in (("--raw-field", False), ("--field", True)):
+        for kv in values.get(flag, []):
+            key, _, val = kv.partition("=")
+            segs = re.findall(r"[^\[\]]+", key)
+            if not segs or segs[-1] not in PROSE_KEYS:
+                continue
+            val = read_text(val[1:], ctx) if typed and val.startswith("@") else check_inline(val)
+            if key in PROSE_KEYS:
+                plain[PROSE_KEYS[key]] = val
+            else:
+                parts[PROSE_KEYS[segs[-1]]].append(val)
+    for slot, val in plain.items():
+        parts[slot].insert(0, val)
+    for path in values.get("--input", []):
+        try:
+            data = json.loads(read_text(path, ctx))
+        except (ValueError, RecursionError):
+            raise Unverifiable(f"the --input file {path} is not JSON")
+        if not isinstance(data, dict):
+            raise Unverifiable(f"the --input file {path} is not a JSON object")
+        for key, slot in PROSE_KEYS.items():
+            if isinstance(data.get(key), str):
+                parts[slot].append(data[key])
+        for item in data.get("comments") if isinstance(data.get("comments"), list) else []:
+            if isinstance(item, dict) and isinstance(item.get("body"), str):
+                parts["body"].append(item["body"])
+    join = lambda vals: "\n\n".join(vals) if vals else None
+    return join(parts["title"]), join(parts["body"])
+
+
+def graphql_check(values, ctx):
+    """Queries pass. A mutation passes only if every root field is known to carry no text."""
+    if values.get("--input"):
+        raise Unverifiable("the GraphQL request body comes from --input")
+    for flag, typed in (("--raw-field", False), ("--field", True)):
+        for kv in values.get(flag, []):
+            key, _, val = kv.partition("=")
+            if key != "query":
+                continue
+            query = read_text(val[1:], ctx) if typed and val.startswith("@") else check_inline(val)
+            if re.search(r"\bmutation\b", query, re.I):
+                roots = {m.lower() for m in re.findall(r"\b(\w+)\s*\(\s*input\s*:", query)}
+                allowed = SAFE_MUTATIONS | ({"updateprojectv2itemfieldvalue"} if PROJECT_CHOICE_RE.search(query) else set())
+                if not roots or not roots <= allowed:
+                    raise Unverifiable("this GraphQL mutation may carry text and is not on the no-text list")
+
+
+def gh_api(args, ctx, env):
+    try:
+        values, bools, positional = parse_flags("api", args)
+        if "--help" in bools:
+            return []
+    except Unverifiable as exc:
+        if API_WRITE_HINT_RE.search(" ".join(args)):
+            return [Post(naive_repos(args, ctx, env), None, None, str(exc))]
+        return []
+    method = (values.get("--method") or [None])[-1]
+    method = method.upper() if method else ("POST" if values.get("--field") or values.get("--raw-field") or values.get("--input") else "GET")
+    if method not in ("POST", "PATCH", "PUT"):
+        return []
+    endpoint = positional[0] if positional else ""
+    host = (values.get("--hostname") or [None])[-1]
+    m = re.match(r"^https?://([^/]+)/(.*)$", endpoint)
+    if m:
+        host, endpoint = host or m.group(1), m.group(2)
+    host = default_host(ctx, env) if host in (None, "api.github.com") else host
+    path = endpoint.lstrip("/").split("?", 1)[0]
+    segs = path.split("/")
+    repos = []
+    try:
+        if "%" in path or any(s in (".", "..") for s in segs):
+            raise Unverifiable("the endpoint path contains dot segments or encoded characters")
+        if segs[0] == "repos" and len(segs) >= 3:
+            if "{" in segs[1] or "{" in segs[2]:
+                repos = cwd_repos(ctx)
+            else:
+                found = make_repo(host, segs[1], segs[2])
+                repos = [found] if found else []
+        if segs[0] == "graphql":
+            graphql_check(values, ctx)
+            return []
+        if not {"issues", "pulls", "comments", "reviews"} & set(segs):
+            return []
+        title, body = api_text(values, ctx)
+    except Unverifiable as exc:
+        return [Post(repos, None, None, str(exc))]
+    if not canonical(title, body):
+        return []
+    return [Post(repos, title, body, None)]
+
+
+# --------------------------------------------------------------------------
+# Shell parsing
+# --------------------------------------------------------------------------
+SEPARATORS = set(";&|()\n`")
+REDIRECTS = set("<>&|;()\n`")
+HEREDOC_OPEN_RE = re.compile(r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|\\?([A-Za-z_][\w.-]*))")
+ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
+VERB_RE = re.compile(r"comment|review|create|edit|close|reopen|merge|\bnew\b|revert|\bapi\b|graphql")
+GH_TEXT_RE = re.compile(r"\bgh\b")
+VAR_RE = re.compile(r"\$\{(\w+)\}|\$(\w+)")
+PAIR_RE = re.compile(r"\b(?:pr|issue|discussion) (?:comment|review|create|new|edit|close|reopen|merge|revert)\b|\bapi\b")
+CONTROL_RE = re.compile(r"[\x01-\x04]")
+GATED_TAIL_RE = re.compile(
+    r"(?:\s+-{1,2}[\w-]+(?:[ =]\S+)?){0,6}\s+(?:((?:pr|issue|discussion)\s+(?:comment|review|create|new|edit|close|reopen|merge|revert)\b)|api\b)"
+)
+FUNCTION_RE = re.compile(r"\bfunction\s+([A-Za-z_]\w*)[^{;]*\{[^}]*\bgh\b|\b([A-Za-z_]\w*)\s*\(\s*\)\s*\{[^}]*\bgh\b")
+INLINE_ENV_RE = re.compile(r"^(GH_REPO|GH_HOST)=(.*)$", re.S)
+
+
+SUBST_MARK = "\x04"
+
+
+def _arithmetic(text, i):
+    """Index just past the `))` that closes the `((` whose first paren is at i (contents are not commands)."""
+    depth, j = 0, i
+    while j < len(text):
+        depth += (text[j] == "(") - (text[j] == ")")
+        j += 1
+        if depth == 0:
+            break
+    return j
+
+
+def _extract(text, i, subs, closer):
+    """Pull a $( ) or backtick body out into `subs`; return (marker text, index after the closer)."""
+    if closer == "`":
+        j = i
+        while j < len(text) and text[j] != "`":
+            j += 2 if text[j] == "\\" else 1
+        inner, _ = _command(text[i:j], 0, subs, False)
+        end = j + 1
+        marker_open, marker_close = "`", "`"
+    else:
+        inner, end = _command(text, i, subs, True)
+        marker_open, marker_close = "$(", ")"
+    subs.append(inner)
+    return f"{marker_open}{SUBST_MARK}{len(subs) - 1}{marker_close}", end
+
+
+def _expansions(body, subs):
+    """Lift the command substitutions out of an unquoted heredoc body; the shell runs them."""
+    i = 0
+    while i < len(body):
+        if body[i] == "\\":
+            i += 2
+        elif body.startswith("$((", i):
+            i = _arithmetic(body, i + 1)
+        elif body.startswith("$(", i):
+            i = _extract(body, i + 2, subs, ")")[1]
+        elif body[i] == "`":
+            i = _extract(body, i + 1, subs, "`")[1]
+        else:
+            i += 1
+
+
+def _heredoc_word(text, i):
+    """Parse the delimiter after `<<` at i -> (delimiter, quoted, strip_tabs, end) or None."""
+    n, j = len(text), i + 2
+    strip = text.startswith("-", j)
+    j += strip
+    while j < n and text[j] in " \t":
+        j += 1
+    word, quoted = [], False
+    while j < n:
+        c = text[j]
+        if c in "'\"":
+            k = text.find(c, j + 1)
+            if k < 0:
+                return None
+            word.append(text[j + 1:k])
+            quoted, j = True, k + 1
+        elif c == "\\" and j + 1 < n:
+            word.append(text[j + 1])
+            quoted, j = True, j + 2
+        elif c in " \t\n;&|()<>":
+            break
+        else:
+            word.append(c)
+            j += 1
+    return ("".join(word), quoted, strip, j) if word else None
+
+
+def _command(text, i, subs, nested):
+    """Scan one command context: drop backslash-newline, # comments and heredoc bodies, mark single-quoted
+    $ and backticks, and lift $( ) / backtick bodies into `subs` (each is itself a command context).
+    Returns (text, index); a nested context ends at the ) that closes its $(. Linear in len(text)."""
+    out, n, quote, word_start, pending, depth, bracket = [], len(text), None, True, [], 0, 0
+    while i < n:
+        c = text[i]
+        if quote == "'":
+            quote = None if c == "'" else quote
+            out.append(c if c == "'" or c not in "$`" else (SQ_DOLLAR if c == "$" else SQ_TICK))
+            i += 1
+            continue
+        if c == "\\":
+            if text[i + 1:i + 2] == "\n":
+                i += 2
+                continue
+            out.append(text[i:i + 2])
+            word_start = False
+            i += 2
+            continue
+        if c == "$" and text.startswith("$((", i):
+            end = _arithmetic(text, i + 1)
+            out.append(text[i:end])
+            word_start = False
+            i = end
+            continue
+        if c == "$" and text.startswith("$(", i) or c == "`":
+            marker, i = _extract(text, i + (2 if c == "$" else 1), subs, ")" if c == "$" else "`")
+            out.append(marker)
+            word_start = False
+            continue
+        if quote == '"':
+            quote = None if c == '"' else quote
+            out.append(c)
+            i += 1
+            continue
+        if c in "'\"":
+            quote = c
+            word_start = False
+        elif c == "$" and text.startswith("$'", i):
+            j = i + 2
+            while j < n and text[j] != "'":
+                j += 2 if text[j] == "\\" else 1
+            out.append("'" + ANSI_C + "'")
+            word_start = False
+            i = j + 1
+            continue
+        elif c == "#" and word_start:
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        elif word_start and c == "(" and text.startswith("((", i):
+            end = _arithmetic(text, i)
+            out.append(text[i:end])
+            word_start = False
+            i = end
+            continue
+        elif word_start and text.startswith("let", i) and text[i + 3:i + 4] in (" ", "\t"):
+            end = i
+            while end < n and text[end] not in "\n;&|":
+                end += 1
+            out.append(text[i:end])
+            word_start = False
+            i = end
+            continue
+        elif c == "(" and nested:
+            depth += 1
+            word_start = True
+        elif c == ")" and nested:
+            if depth == 0:
+                return "".join(out), i + 1
+            depth -= 1
+            word_start = True
+        elif c == "[":
+            bracket += 1
+            word_start = False
+        elif c == "]":
+            bracket = max(0, bracket - 1)
+            word_start = False
+        elif (c == "<" and text.startswith("<<", i) and not text.startswith("<<<", i) and text[i - 1:i] != "<"
+              and not bracket):
+            parsed = _heredoc_word(text, i)
+            if parsed:
+                delimiter, quoted, strip_tabs, end = parsed
+                pending.append((delimiter, quoted, strip_tabs))
+                out.append(text[i:end])
+                word_start = False
+                i = end
+                continue
+        elif c == "\n":
+            out.append(c)
+            i += 1
+            for delimiter, quoted, strip_tabs in pending:
+                body_start = i
+                body_end = n
+                while i < n:
+                    end = text.find("\n", i)
+                    line = text[i:] if end < 0 else text[i:end]
+                    line_start = i
+                    i = n if end < 0 else end + 1
+                    if (line.lstrip("\t") if strip_tabs else line) == delimiter:
+                        body_end = line_start
+                        break
+                if not quoted:
+                    _expansions(text[body_start:body_end], subs)
+            pending = []
+            word_start = True
+            bracket = 0
+            continue
+        else:
+            word_start = c in " \t;&|"
+        out.append(c)
+        i += 1
+    return "".join(out), i
+
+
+def preprocess(text, subs):
+    return _command(text, 0, subs, False)[0]
+
+
+def split_commands(text):
+    """Simple commands as token lists, with "(" and ")" strings between them marking subshell scope."""
+    lex = shlex.shlex(text, posix=True, punctuation_chars="();<>|&\n`")
+    lex.whitespace = " \t\r"
+    lex.whitespace_split = True
+    lex.commenters = ""
+    items, current, skip, redirect = [], [], False, ""
+
+    def flush():
+        nonlocal current
+        if current:
+            items.append(current)
+        current = []
+
+    for tok in lex:
+        if skip:
+            skip = False
+            if ">" in redirect:
+                items.append(("W", tok))
+        elif tok and set(tok) <= SEPARATORS:
+            flush()
+            items += [ch for ch in tok if ch in "()"]
+            if tok in ("|", "|&"):
+                items.append("|")
+        elif tok and set(tok) <= REDIRECTS and tok.endswith("("):
+            flush()
+            items.append("(")
+        elif tok and set(tok) <= REDIRECTS:
+            skip, redirect = True, tok
+        else:
+            current.append(tok)
+    flush()
+    return items
+
+
+# --------------------------------------------------------------------------
+# Shell state: assignments, exports, directory changes
+# --------------------------------------------------------------------------
+HELPER = "outbound-comment-review-gate"
+READ_ONLY = {"ls", "cat", "head", "tail", "wc", "stat", "jq", "grep", "shasum", "cd", "pushd", "popd",
+             "chdir", "echo", "printf", "test", "[", "file", "du", "diff", "less", "more", "realpath"}
+# Read-only unless one of their flags writes a file or runs a program.
+FIND_WRITERS = {"-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"}
+RG_RUNNERS = ("--pre", "--hostname-bin")
+# Commands that only read or display their arguments, so naming the helper or a flag after them is not running it.
+NON_EXEC = {"git", "grep", "egrep", "fgrep", "rg", "ag", "ack", "cat", "bat", "less", "more", "head", "tail", "wc", "stat",
+            "file", "ls", "vim", "vi", "nvim", "nano", "emacs", "code", "open", "cp", "mv", "rm", "ln", "diff", "man",
+            "echo", "printf", "shasum"}
+
+
+INTERPRETER_RE = re.compile(r"^(?:[bzdk]?a?sh|python[\d.]*|perl|ruby|node|source|\.|eval)$")
+
+
+def runs_record(text):
+    """Does this text name the helper together with the record command or its reviewer flag?"""
+    return HELPER in text and bool(re.search(r"\brecord\b|--reviewer-model", text))
+
+
+def reads_a_script(base, rest):
+    """A shell or interpreter that takes its program from stdin (or `source`), so the program is not in the words."""
+    if not INTERPRETER_RE.match(base):
+        return False
+    if base in ("source", "."):
+        return True
+    return [t for t in rest if not t.startswith("-") or t == "-"] in ([], ["-"])
+
+
+def read_only(base, rest):
+    if base in READ_ONLY:
+        return True
+    if base == "find":
+        return not FIND_WRITERS & set(rest)
+    if base == "sort":
+        return not any(t.startswith("--output") or (re.match(r"-[^-]", t) and "o" in t[1:]) for t in rest)
+    if base == "rg":
+        return not any(t.split("=")[0] in RG_RUNNERS for t in rest)
+    return False
+RECORD_REASON = (
+    "Outbound review gate: a receipt is recorded by the reviewing subagent, not by the session that posts. Have the "
+    "fresh adversarial reviewer run the helper's record command on the exact text as the last step of its review; "
+    "the hub then runs the disposition command once every finding is applied or rejected with a reason."
+)
+WRITE_REASON = (
+    "Outbound review gate: receipt files are written only by the helper's record and disposition commands, never "
+    "by hand."
+)
+
+
+@functools.lru_cache(maxsize=4)
+def _receipt_dirs(configured):
+    absdir = os.path.abspath(configured)
+    return frozenset({absdir.casefold(), os.path.realpath(absdir).casefold()})
+
+
+def receipt_dirs():
+    """The receipt directory as an absolute path and as a real path, casefolded."""
+    return _receipt_dirs(receipt_dir())
+
+
+@functools.lru_cache(maxsize=4)
+def _receipt_forms(configured):
+    forms = set(_receipt_dirs(configured))
+    home = os.path.expanduser("~").rstrip("/")
+    absdir = os.path.abspath(configured)
+    if absdir.startswith(home + "/") and absdir[len(home):].count("/") > 1:
+        forms.add(absdir[len(home):].casefold())
+    return frozenset(forms)
+
+
+def receipt_forms():
+    """Casefolded spellings of the receipt directory that can sit inside a longer string: the absolute and real
+    paths, and the part under $HOME (so ~/, $HOME/ and a different home spelling all match)."""
+    return _receipt_forms(receipt_dir())
+
+
+def touches_receipts(text, ctx=None, cwd=None):
+    """True when `text` (a shell word or a file path) names something inside the receipt directory, after
+    expanding $HOME, ~ and known variables, resolving . and .. against the cwd, and ignoring case (APFS)."""
+    home = os.path.expanduser("~")
+    if ctx is not None:
+        text = expand_vars(text, ctx)
+        cwd = cwd or ctx.cwd
+    text = re.sub(r"\$\{HOME\}|\$HOME\b", lambda m: home, text)
+    if text == "~" or text.startswith("~/"):
+        text = home + text[1:]
+    forms = receipt_forms()
+    if any(f in text.casefold() for f in forms):
+        return True
+    dirs = receipt_dirs()
+    base = cwd or os.getcwd()
+    for cand in {text, text.split("=", 1)[-1]}:
+        if not cand or "\n" in cand:
+            continue
+        joined = os.path.normpath(os.path.join(base, cand))
+        for spelling in (joined, os.path.realpath(joined) if "/" in cand else joined):
+            folded = spelling.casefold()
+            if any(folded == d or folded.startswith(d + "/") for d in dirs):
+                return True
+    return False
+
+
+def mentions_receipts(text):
+    """Cheap filter: could this command line be about the receipt directory? Only decides whether to look closer."""
+    folded = text.casefold()
+    return "outbound-review" in folded or os.path.basename(receipt_dir().rstrip("/")).casefold() in folded
+
+
+def guard_post(reason):
+    return Post([], None, None, None, f"{reason} Helper: {helper_path()}")
+
+
+RESERVED = {"if", "then", "elif", "else", "do", "while", "until", "time", "!", "{", "}", "builtin", "command"}
+
+
+def is_literal(value):
+    return not re.search(r"[$`\x01-\x04]", value)
+
+
+def expand_vars(value, ctx):
+    return VAR_RE.sub(lambda m: ctx.vars.get(m.group(1) or m.group(2), m.group(0)), value)
+
+
+def note_assignment(assignment, ctx, export=False):
+    """NAME=value: remember literal values; G="env -u GH_TOKEN gh" makes $G an alias for gh; exported
+    GH_REPO/GH_HOST change where gh posts."""
+    name, _, value = assignment.partition("=")
+    value = restore(value)
+    if is_literal(value):
+        ctx.vars[name] = value
+    try:
+        words = shlex.split(value)
+    except ValueError:
+        words = []
+    if any(os.path.basename(w) == "gh" for w in words):
+        ctx.aliases.add(name)
+    if name in ("GH_REPO", "GH_HOST") and (export or ctx.autoexport):
+        ctx.env[name] = value
+
+
+def change_dir(base, args, ctx):
+    target = next((a for a in args if not a.startswith("-")), None)
+    if base == "popd" or target is None or target == "-" or not is_literal(target):
+        ctx.moved = True
+        return
+    if target.startswith("~") and target != "~" and not target.startswith("~/"):
+        ctx.moved = True
+        return
+    target = os.path.expanduser(target)
+    if os.path.isabs(target):
+        ctx.moved = False
+    elif ctx.moved:
+        return
+    ctx.cwd = os.path.normpath(os.path.join(ctx.cwd or os.getcwd(), target))
+
+
+def simple_command(toks, ctx, depth):
+    i = 0
+    while i < len(toks) and (ASSIGN_RE.match(toks[i]) or toks[i] in RESERVED):
+        if ASSIGN_RE.match(toks[i]):
+            note_assignment(toks[i], ctx)
+        i += 1
+    if i >= len(toks):
+        return []
+    word = toks[i]
+    base = os.path.basename(word)
+    rest = toks[i + 1:]
+    names = {os.path.basename(t) for t in toks if not ASSIGN_RE.match(t)}
+    helper_call = HELPER in names and base not in NON_EXEC
+    if not ctx.agent and base not in NON_EXEC and not {"--help", "-h"} & set(toks) and (
+        any(t == "--reviewer-model" or t.startswith("--reviewer-model=") for t in toks)
+        or (helper_call and "record" in toks)
+    ):
+        return [guard_post(RECORD_REASON)]
+    if (not ctx.agent and not {"--help", "-h"} & set(toks) and reads_a_script(base, rest)
+            and runs_record(ctx.text)):
+        return [guard_post(RECORD_REASON)]
+    if not helper_call and not read_only(base, rest) and any(touches_receipts(t, ctx) for t in set(toks)):
+        return [guard_post(WRITE_REASON)]
+    if base in ("cd", "chdir", "pushd", "popd"):
+        change_dir(base, rest, ctx)
+        return []
+    if base == "export" or (base in ("typeset", "declare") and any(a.startswith("-") and "x" in a for a in rest)):
+        for tok in rest:
+            if ASSIGN_RE.match(tok):
+                note_assignment(tok, ctx, export=True)
+            elif tok in ("GH_REPO", "GH_HOST") and tok in ctx.vars:
+                ctx.env[tok] = ctx.vars[tok]
+        return []
+    if base == "set":
+        ctx.autoexport = "-a" in rest or (ctx.autoexport and "+a" not in rest)
+        return []
+    if base in ("echo", "printf"):
+        return []
+    posts = []
+    if ANSI_C in word and PAIR_RE.search(" ".join(rest)):
+        posts.append(Post([], None, None, "the command name uses $'...' quoting"))
+    gh_at = next((j for j, tok in enumerate(toks) if os.path.basename(tok) == "gh" and not ASSIGN_RE.match(tok)), None)
+    if gh_at is not None:
+        env, saved = dict(ctx.env), (ctx.cwd, ctx.moved)
+        before = toks[:gh_at]
+        for k, tok in enumerate(before):
+            m = INLINE_ENV_RE.match(restore(tok))
+            if m:
+                env[m.group(1)] = m.group(2)
+            target = before[k + 1] if tok in ("-C", "--chdir") and k + 1 < len(before) else (
+                tok[len("--chdir="):] if tok.startswith("--chdir=") else None
+            )
+            if target is not None and "env" in [os.path.basename(t) for t in before]:
+                change_dir("cd", [target], ctx)
+        posts += gh_command(toks[gh_at + 1:], ctx, env)
+        ctx.cwd, ctx.moved = saved
+    else:
+        args = toks[i + 1:]
+        name = re.sub(r"^\$\{?|\}$", "", word)
+        if name in ctx.aliases or ("$" in word and args and args[0] in ("pr", "issue", "discussion", "api")):
+            posts += gh_command(args, ctx, dict(ctx.env))
+    if depth >= MAX_DEPTH:
+        return posts
+    for j, tok in enumerate(toks):
+        name = os.path.basename(tok)
+        if name not in SHELLS and name not in ("eval", "env"):
+            continue
+        tail = toks[j + 1:]
+        if name in SHELLS:
+            for k, arg in enumerate(tail):
+                if arg.startswith("-") and not arg.startswith("--") and "c" in arg:
+                    script = [a for a in tail[k + 1:] if a != "--"]
+                    if script:
+                        posts += scan(script[0], ctx, depth + 1)
+                    break
+            else:
+                if depth == 0 and ctx.mentions_gated and not [a for a in tail if not a.startswith("-")]:
+                    posts.append(Post([], None, None, "a script is fed to the shell on stdin"))
+        elif name == "eval":
+            posts += scan(" ".join(tail), ctx, depth + 1)
+        elif name == "env":
+            for k, arg in enumerate(tail):
+                if arg in ("-S", "--split-string") and k + 1 < len(tail):
+                    posts += scan(tail[k + 1], ctx, depth + 1)
+                elif arg.startswith("-S") and len(arg) > 2:
+                    posts += scan(arg[2:], ctx, depth + 1)
+    return posts
+
+
+def run_text(text, ctx, depth):
+    """Each pipeline stage runs in its own subshell, so a cd there does not outlive the stage."""
+    posts, scopes = [], []
+    items = split_commands(text)
+    for k, item in enumerate(items):
+        if isinstance(item, tuple):
+            if touches_receipts(item[1], ctx):
+                posts.append(guard_post(WRITE_REASON))
+        elif item == "(":
+            scopes.append((ctx.cwd, ctx.moved))
+        elif item == ")":
+            if scopes:
+                ctx.cwd, ctx.moved = scopes.pop()
+        elif item != "|":
+            piped = (k > 0 and items[k - 1] == "|") or (k + 1 < len(items) and items[k + 1] == "|")
+            saved = (ctx.cwd, ctx.moved)
+            posts += simple_command(item, ctx, depth)
+            if piped:
+                ctx.cwd, ctx.moved = saved
+    return posts
+
+
+def scan(command, ctx, depth=0):
+    subs = []
+    top = preprocess(command, subs)
+    everything = top + "\n" + "\n".join(subs)
+    for m in FUNCTION_RE.finditer(everything):
+        ctx.aliases.add(m.group(1) or m.group(2))
+    posts = run_text(top, ctx, depth)
+    for inner in subs:
+        saved = (ctx.cwd, ctx.moved)
+        posts += run_text(inner, ctx, depth + 1)
+        ctx.cwd, ctx.moved = saved
+    return posts
+
+
+def looks_like_gated(text):
+    """Cheap linear test: does `text` contain a gh call of a gated kind? (Used where parsing is impossible.)"""
+    for m in GH_TEXT_RE.finditer(text):
+        tail = text[m.end():m.end() + 300]
+        hit = GATED_TAIL_RE.match(tail)
+        if hit and (hit.group(1) or API_WRITE_HINT_RE.search(tail)):
+            return True
+    return False
+
+
+def mentions_guarded_things(command):
+    plain = re.sub(r"[\\'\"]", "", command)
+    return HELPER in plain or "--reviewer-model" in plain or mentions_receipts(plain)
+
+
+def bash_posts(command, ctx):
+    if not isinstance(command, str):
+        return []
+    guarded = mentions_guarded_things(command)
+    if not guarded and not VERB_RE.search(command):
+        return []
+    if not guarded and not GH_TEXT_RE.search(command) and "$" not in command:
+        return []
+    gated = looks_like_gated(command)
+    if len(command) > MAX_COMMAND:
+        return [Post([], None, None, "the command is too large to read")] if gated else []
+    if CONTROL_RE.search(command) and gated:
+        return [Post([], None, None, "the command contains control characters this gate reserves")]
+    ctx.mentions_gated = gated
+    ctx.text = command
+    try:
+        return scan(command, ctx)
+    except Exception:
+        return [Post([], None, None, "the command could not be parsed")] if gated else []
+
+
+def applescript_posts(script, ctx):
+    if not ctx.agent and "do shell script" in script and runs_record(script):
+        return [guard_post(RECORD_REASON)]
+    if "do shell script" not in script or not GH_TEXT_RE.search(script) or not VERB_RE.search(script):
+        return []
+    repos = []
+    for spec in re.findall(r"(?:-R|--repo)[ =]+([\w./:-]+)", script):
+        repo = norm_repo(spec)
+        repos.append(repo or "unparsed/" + spec)
+    return [Post(repos[-1:], None, None, "AppleScript do shell script is not parsed")]
+
+
+# --------------------------------------------------------------------------
+# MCP tools
+# --------------------------------------------------------------------------
+# tool -> (title field, body field); the same names serve the GitHub and Forgejo servers.
+MCP_FIELDS = {
+    "add_issue_comment": (None, "body"),
+    "add_reply_to_pull_request_comment": (None, "body"),
+    "add_comment_to_pending_review": (None, "body"),
+    "create_pull_request": ("title", "body"),
+    "issue_write": ("title", "body"),
+    "pull_request_review_write": (None, "body"),
+    "update_issue_comment": (None, "body"),
+    "update_pull_request": ("title", "body"),
+    "merge_pull_request": ("commit_title", "commit_message"),
+    "create_issue": ("title", "body"),
+    "create_issue_comment": (None, "body"),
+    "create_pull_request_review": (None, "body"),
+    "edit_issue": ("title", "body"),
+    "edit_issue_comment": (None, "body"),
+    "edit_pull_request": ("title", "body"),
+}
+
+
+def mcp_posts(name, tool_input):
+    parts = name.split("__")
+    server, tool = "__".join(parts[1:-1]).lower(), parts[-1]
+    if tool not in MCP_FIELDS:
+        return []
+    owner, repo = tool_input.get("owner"), tool_input.get("repo")
+    has_repo = isinstance(owner, str) and isinstance(repo, str)
+    forgejo, github = "forgejo" in server, "github" in server
+    if not (forgejo or github or has_repo):
+        return []
+    title_field, body_field = MCP_FIELDS[tool]
+    title = tool_input.get(title_field) if title_field else None
+    body = tool_input.get(body_field)
+    title = title if isinstance(title, str) else None
+    body = body if isinstance(body, str) else None
+    inline = tool_input.get("comments")
+    if forgejo and isinstance(inline, list):
+        extra = [c["body"] for c in inline if isinstance(c, dict) and isinstance(c.get("body"), str)]
+        if extra:
+            body = "\n\n".join(([body] if body and body.strip() else []) + extra)
+    if not canonical(title, body):
+        return []
+    host = (os.environ.get("OUTBOUND_GATE_FORGEJO_HOST") or DEFAULT_FORGEJO_HOST) if forgejo else "github.com"
+    found = make_repo(host, owner, repo) if has_repo else None
+    return [Post([found] if found else [], title, body, None)]
+
+
+# --------------------------------------------------------------------------
+# Hook
+# --------------------------------------------------------------------------
+def helper_path():
+    return shlex.quote(os.path.abspath(sys.argv[0]))
+
+
+def deny_reason(post, key=None):
+    if post.guard:
+        return post.guard
+    where = ", ".join(post.repos) or "a repository that could not be resolved"
+    if post.problem:
+        return (
+            f"Outbound review gate: this post to {where} cannot be verified ({post.problem}), so no review receipt "
+            "can cover it. Write the exact text to a file on its own first, have a fresh adversarial reviewer check "
+            "that file, record a receipt, then post with --body-file pointing at the same file (MCP tools: send the "
+            "same text as a literal string)."
+        )
+    return (
+        f"Outbound review gate: no valid review receipt for this post to {where} (sha256 {key}: "
+        f"{receipt_problem(key)}). Standing rule: a fresh adversarial reviewer subagent must check the exact text "
+        "against the Outbound PR Authorship Standard and verify every claim; it records the receipt, and every "
+        f"finding must then be dispositioned by the hub. Usage: {helper_path()} record --help. Editing the text or "
+        "naming a different repo changes the key and needs a new receipt."
+    )
+
+
+def collect(name, tool_input, payload):
+    cwd = tool_input.get("cwd") if isinstance(tool_input.get("cwd"), str) else payload.get("cwd")
+    ctx = Ctx(cwd if isinstance(cwd, str) else None, agent=bool(payload.get("agent_id")))
+    posts = []
+    if name in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
+        path = tool_input.get("file_path") or tool_input.get("notebook_path")
+        if isinstance(path, str) and touches_receipts(path, cwd=ctx.cwd):
+            posts.append(guard_post(WRITE_REASON))
+    command, script = tool_input.get("command"), tool_input.get("script")
+    if isinstance(command, str):
+        posts += bash_posts(command, ctx)
+    if isinstance(script, str):
+        posts += applescript_posts(script, ctx)
+    if name.startswith("mcp__"):
+        posts += mcp_posts(name, tool_input)
+    return posts
+
+
+def decide(payload):
+    if not isinstance(payload, dict) or payload.get("hook_event_name") not in (None, "PreToolUse"):
+        return None
+    name, tool_input = payload.get("tool_name"), payload.get("tool_input")
+    if not isinstance(name, str) or not isinstance(tool_input, dict):
+        return None
+    try:
+        posts = collect(name, tool_input, payload)
+    except Exception:
+        if name.split("__")[-1] in MCP_FIELDS:
+            posts = [Post([], None, None, "the call could not be analysed")]
+        else:
+            return None
+    for post in posts:
+        if post.guard:
+            return post.guard
+    for post in posts:
+        try:
+            if post.repos and all(is_owned(r) for r in post.repos):
+                continue
+            problem = post.problem
+            if not problem and (len(post.repos) != 1 or post.repos[0].startswith("unparsed/")):
+                problem = "the target repo could not be resolved to exactly one repo; pass -R owner/repo"
+            if problem:
+                return deny_reason(Post(post.repos, None, None, problem))
+            key = digest(post.repos[0], post.title, post.body)
+            if receipt_problem(key):
+                return deny_reason(post, key)
+        except Exception:
+            return deny_reason(Post(post.repos, None, None, "the receipt check failed"))
+    return None
+
+
+def run_hook():
+    try:
+        reason = decide(json.loads(sys.stdin.buffer.read().decode("utf-8", "replace")))
+    except Exception:
+        return 0
+    if reason:
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }}))
+    return 0
+
+
+# --------------------------------------------------------------------------
+# Helper CLI
+# --------------------------------------------------------------------------
+def atomic_write(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
+        fh.write("\n")
+    os.replace(tmp, path)
+
+
+def write(parser, path, data):
+    try:
+        atomic_write(path, data)
+    except (OSError, UnicodeError) as exc:
+        parser.error(f"cannot write the receipt: {getattr(exc, 'strerror', None) or exc}")
+
+
+def now():
+    import datetime
+
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def cli(argv):
+    import argparse
+
+    parser = argparse.ArgumentParser(prog=HELPER, description=__doc__.split("\n\n")[0], allow_abbrev=False)
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    for name, help_text in (
+        ("record", "reviewing subagent: write a receipt for the exact text, for one repo"),
+        ("disposition", "hub: mark a receipt's findings applied or rejected with a reason"),
+        ("hash", "print the receipt key for a repo and text"),
+    ):
+        p = sub.add_parser(name, help=help_text, allow_abbrev=False)
+        p.add_argument("--repo", required=name != "disposition", help="OWNER/REPO, HOST/OWNER/REPO or a URL")
+        p.add_argument("--title")
+        p.add_argument("--body")
+        p.add_argument("--body-file")
+        if name == "disposition":
+            p.add_argument("--sha256", help="the key record printed, instead of repo and text")
+        if name == "record":
+            p.add_argument("--reviewer-model", required=True, help="model of the fresh reviewer, e.g. opus")
+            p.add_argument("--verdict", required=True, choices=("go", "no-go"))
+            p.add_argument("--findings", required=True, type=int, help="number of findings the reviewer raised")
+            p.add_argument("--note")
+    args = parser.parse_args(argv)
+
+    if args.cmd == "disposition" and args.sha256:
+        key = args.sha256
+        if not re.fullmatch(r"[0-9a-f]{64}", key):
+            parser.error("--sha256 must be 64 lowercase hex characters")
+    else:
+        if not args.repo:
+            parser.error("give --repo and the text, or --sha256")
+        repo = norm_repo(args.repo)
+        if not repo:
+            parser.error("--repo must be OWNER/REPO, HOST/OWNER/REPO or a repo URL made of plain names")
+        body = args.body
+        if args.body_file is not None:
+            if body is not None:
+                parser.error("give --body or --body-file, not both")
+            try:
+                path = os.path.expanduser(args.body_file)
+                st = os.stat(path)
+                if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_TEXT:
+                    parser.error("--body-file must be a regular file of at most 1 MiB")
+                with open(path, "rb") as fh:
+                    body = fh.read(MAX_TEXT + 1).decode("utf-8", "replace")
+            except OSError as exc:
+                parser.error(f"cannot read --body-file: {exc.strerror}")
+        if not canonical(args.title, body):
+            parser.error("no text: give --title and/or --body/--body-file")
+        try:
+            key = digest(repo, args.title, body)
+        except UnicodeError:
+            parser.error("the text is not valid unicode")
+    if args.cmd == "hash":
+        print(key)
+        return 0
+
+    path = os.path.join(receipt_dir(), key + ".json")
+    if args.cmd == "record":
+        if not args.reviewer_model.strip():
+            parser.error("--reviewer-model must name the reviewer's model")
+        if args.findings < 0:
+            parser.error("--findings cannot be negative")
+        write(parser, path, {
+            "sha256": key,
+            "repo": repo,
+            "reviewer_model": args.reviewer_model,
+            "reviewed_at": now(),
+            "verdict": args.verdict,
+            "findings": args.findings,
+            "dispositioned": False,
+            **({"note": args.note} if args.note else {}),
+        })
+        print("note: the hub must run disposition before this receipt unlocks the post", file=sys.stderr)
+        print(key)
+        return 0
+
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        parser.error("no receipt for that repo and text; the reviewer must run record first")
+    except (OSError, ValueError, RecursionError):
+        parser.error("the receipt on file is malformed")
+    if not isinstance(data, dict) or data.get("sha256") != key:
+        parser.error("the receipt on file is malformed")
+    if data.get("verdict") != "go":
+        parser.error("the reviewer's verdict is not go, so there is nothing to disposition")
+    data.update(dispositioned=True, dispositioned_at=now())
+    write(parser, path, data)
+    print(key)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(cli(sys.argv[1:]) if len(sys.argv) > 1 else run_hook())

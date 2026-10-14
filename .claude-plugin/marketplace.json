@@ -15,6 +15,11 @@
       "description": "Cross-session messaging for Claude Code Desktop (CCD): how sessions message each other via mcp__ccd_session_mgmt__send_message and how a session reports its own address."
     },
     {
+      "name": "outbound-review-gate",
+      "source": "./plugins/outbound-review-gate",
+      "description": "PreToolUse hook that denies a post to a third-party repository (comment, review, issue, PR) unless a review receipt exists for the exact text."
+    },
+    {
       "name": "rubicon-marketing-board",
       "source": {
         "source": "github",

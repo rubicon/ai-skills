@@ -17,5 +17,6 @@
   "plugins/pitstop": "0.3.2",
   "plugins/loadout": "0.1.0",
   "plugins/salience": "0.5.0",
-  "plugins/session-messaging": "0.1.0"
+  "plugins/session-messaging": "0.1.0",
+  "plugins/outbound-review-gate": "0.1.0"
 }

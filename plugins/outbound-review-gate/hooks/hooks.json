@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|Write|Edit|MultiEdit|NotebookEdit|Monitor|mcp__terminal__run_in_terminal|mcp__Control_your_Mac__osascript|mcp__.*__(add_issue_comment|add_reply_to_pull_request_comment|add_comment_to_pending_review|create_pull_request|issue_write|pull_request_review_write|update_issue_comment|update_pull_request|merge_pull_request|create_issue|create_issue_comment|create_pull_request_review|edit_issue|edit_issue_comment|edit_pull_request))$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/outbound-comment-review-gate\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
