@@ -591,7 +591,8 @@ class TestReceiptScope(ShellCase):
             f"gh issue new -R {TP} --title t --body x": ("issue create", ""),
             f"gh pr merge 5 -R {TP} --body x": ("pr merge", "5"),
             f"gh pr close 7 -R {TP} --comment hi": ("pr close", "7"),
-            f"gh pr review 7 -R {TP} --comment --body x": ("pr review", "7"),
+            f"gh pr review 7 -R {TP} --comment --body x": ("pr review --comment", "7"),
+            f"gh pr review 7 -R {TP} --approve --body x": ("pr review --approve", "7"),
             f"gh api -X POST repos/{TP}/issues/7/comments -f body=x": ("api POST", f"repos/{TP}/issues/7/comments".lower()),
         }
         for command, (action, target) in cases.items():
@@ -608,6 +609,9 @@ class TestReceiptScope(ShellCase):
             ("mcp__github__merge_pull_request", dict(owner=o, repo=r, pullNumber=5, commit_message="B"), ("merge_pull_request", "5")),
             ("mcp__forgejo__create_issue_comment", dict(owner=o, repo=r, index=3, body="B"), ("create_issue_comment", "3")),
             ("mcp__forgejo__edit_issue_comment", dict(owner=o, repo=r, id=11, body="B"), ("edit_issue_comment", "11")),
+            ("mcp__github__issue_write", dict(method="update", owner=o, repo=r, issue_number=4, title="T"), ("issue_write update", "4")),
+            ("mcp__github__add_reply_to_pull_request_comment", dict(owner=o, repo=r, pullNumber=5, commentId=99, body="B"),
+             ("add_reply_to_pull_request_comment", "5/99")),
         ]
         for tool, tool_input, (action, target) in cases:
             with self.subTest(tool):
@@ -623,6 +627,15 @@ class TestReceiptScope(ShellCase):
                       f"gh issue create -R {TP} --title t --body hi"):
             with self.subTest(other):
                 self.assertDenied(self.bash(other))
+
+    def test_a_receipt_does_not_unlock_a_sibling_comment_or_review_mode(self):
+        reply = dict(owner="otherorg", repo="widgets", pullNumber=5, commentId=99, body="B")
+        tool = ("mcp__github__add_reply_to_pull_request_comment", reply)
+        self.record(body="B", tool=tool)
+        self.assertAllowed(self.mcp(*tool))
+        self.assertDenied(self.mcp(tool[0], dict(reply, commentId=100)))
+        self.record(body="x", command=f"gh pr review 7 -R {TP} --comment --body x")
+        self.assertDenied(self.bash(f"gh pr review 7 -R {TP} --approve --body x"))
 
     def test_the_helper_prints_the_same_key_as_the_hook_computes(self):
         for command in (f"gh pr comment 7 -R {TP} --body hi", f"gh pr create -R {TP} --title t --body hi -H h"):
@@ -680,6 +693,22 @@ class TestFalsePositivesAndTiming(ShellCase):
             with self.subTest(command):
                 self.assertDenied(self.shell(command, env=home))
 
+    def test_other_spellings_of_the_receipt_directory_are_still_writes(self):
+        home = {"OUTBOUND_REVIEW_DIR": ""}
+        for command in ("echo x > ${VAR}/.claude/state/outbound-review/k.json",
+                        "echo x > /Users/$USER/.claude/state/outbound-review/k.json",
+                        f"echo x > /System/Volumes/Data{self.tmp}/.claude/state/outbound-review/k.json"):
+            with self.subTest(command):
+                self.assertDenied(self.shell(command, env=home))
+        payload = {"hook_event_name": "PreToolUse", "tool_name": "Write", "cwd": str(self.work),
+                   "tool_input": {"file_path": f"/System/Volumes/Data{self.tmp}/.claude/state/outbound-review/k.json", "content": "x"}}
+        self.assertDenied(self.hook(payload, env=home))
+
+    def test_a_gh_call_deep_inside_a_function_body_is_still_found(self):
+        body = "echo filler\n" * 2000
+        command = f"c() {{\n{body}  gh \"$@\"\n}}\nc pr comment 7 -R {TP} --body x"
+        self.assertDenied(self.bash(command))
+
     def test_function_definition_scan_stays_linear(self):
         start = time.perf_counter()
         r = self.bash(f"gh pr comment 7 -R {TP} --body x\n" + "f(){ " * 24000)
@@ -688,6 +717,7 @@ class TestFalsePositivesAndTiming(ShellCase):
 
     def test_a_file_named_dash_is_not_stdin(self):
         (self.work / "-").write_text("body from a file named dash")
+        self.record(body="body from a file named dash")
         self.assertDenied(self.bash(f"gh pr comment 7 -R {TP} --body-file -"))
 
 
@@ -722,6 +752,247 @@ class TestHooksJson(unittest.TestCase):
         self.assertEqual(hook["type"], "command")
         self.assertIn("${CLAUDE_PLUGIN_ROOT}/scripts/outbound-comment-review-gate", hook["command"])
         self.assertTrue(os.access(str(GATE), os.X_OK))
+
+
+class TestBuild7MainThreadHelper(ShellCase):
+    """Independent review of build 6: the main thread may only run the helper's disposition, hash and help."""
+
+    H = "~/.claude/hooks/outbound-comment-review-gate"
+    FLAGS = f"--repo {TP} --body x --verdict go --findings 0"
+
+    def test_hidden_record_is_denied_for_the_main_thread_and_allowed_for_a_subagent(self):
+        h, f = self.H, self.FLAGS
+        forms = {
+            "variables": f"R=record M=--reviewer-model; {h} $R {f} $M opus",
+            "ansi_c": f"{h} $'record' {f} $'--reviewer-model' opus",
+            "substitution": f'{h} "$(echo record)" {f} "$(echo --reviewer-model)" opus',
+            "variable_helper": f"HV={h}; $HV record {f} --reviewer-model opus",
+            "copied_helper": f"cp {h} /tmp/x-copy && /tmp/x-copy record {f} --reviewer-model opus",
+            "copied_helper_hidden_word": f"cp {h} /tmp/x-copy && /tmp/x-copy $R {f} $M opus",
+            "backtick": f"{h} `echo record` {f}",
+            "git_alias": f"git -c alias.x='!{h} record {f} --reviewer-model opus' x",
+            "vim_command": f"vim -c '!{h} record {f} --reviewer-model opus' -c q",
+            "xargs": f"echo x | xargs {h} $R {f}",
+            "env_wrapper": f"env A=1 {h} $'rec''ord' {f}",
+        }
+        for name, command in forms.items():
+            with self.subTest(name):
+                self.assertDenied(self.shell(command))
+                self.assertAllowed(self.shell(command, agent=True))
+
+    def test_a_help_flag_does_not_excuse_the_record_only_flags(self):
+        h = self.H
+        self.assertDenied(self.shell(f"{h} record {self.FLAGS} --reviewer-model opus --help"))
+        self.assertDenied(self.shell(f"python3 /tmp/copy.py {self.FLAGS} --note -h"))
+        self.assertAllowed(self.shell(f"{h} record --help"))
+
+    def test_the_main_thread_may_still_disposition_hash_and_ask_for_help(self):
+        h = self.H
+        plain = f"--repo {TP} --action 'pr comment' --target 7 --body x"
+        for command in (f"{h} disposition {plain}", f"{h} hash {plain}", f"{h} --help", f"{h} -h",
+                        f"{h} disposition --help", f"cat {h}", f"ls -la {h}", f"grep -n record {h}",
+                        "git log --oneline -- outbound-comment-review-gate", f"rm -f /tmp/{h.rsplit('/', 1)[-1]}"):
+            with self.subTest(command):
+                self.assertAllowed(self.shell(command))
+
+
+class TestBuild7Wrappers(ShellCase):
+    """gh calls hidden inside a string handed to a wrapper that runs it as a shell command."""
+
+    POST = f"gh pr comment 7 -R {TP} --body x"
+
+    def test_wrapped_third_party_posts_are_denied(self):
+        post = self.POST
+        forms = {
+            "watch": f"watch -n 1 '{post}'",
+            "tmux": f"tmux new-session -d '{post}'",
+            "script": f"script -q /dev/null -c '{post}'",
+            "ssh": f"ssh host '{post}'",
+            "osascript": f"osascript -e 'do shell script \"{post}\"'",
+            "git_alias": f"git -c alias.p='!{post}' p",
+            "git_rebase_exec": f"git rebase --exec '{post}' HEAD~1",
+            "vim": f"vim -c '!{post}' -c q",
+            "python": "python3 -c 'import subprocess; subprocess.run([\"gh\", \"pr\", \"comment\", \"7\", \"-R\", \"" + TP + "\"])'",
+        }
+        for name, command in forms.items():
+            with self.subTest(name):
+                self.assertDenied(self.bash(command))
+
+    def test_wrapped_owned_posts_and_plain_mentions_are_allowed(self):
+        for command in ("watch -n 1 'gh pr comment 7 -R myorg/x --body x'", "ssh host ls",
+                        'git commit -m "document gh pr comment usage"', "watch -n 1 date",
+                        f"echo '{self.POST}'", f"grep -rn 'gh pr comment' docs"):
+            with self.subTest(command):
+                self.assertAllowed(self.bash(command))
+
+    def test_a_gh_command_is_not_rescanned_for_gh_text_in_its_own_body(self):
+        own = {"OUTBOUND_GATE_OWNED": "github.com/myorg/*"}
+        body = "enable it with `gh api -X PUT repos/myorg/x/automated-security-fixes`; it is \"quoted"
+        command = f"env -u GH_TOKEN gh issue create -R myorg/x --title t --body '{body}' 2>&1 | tail -2"
+        self.assertAllowed(self.bash(command, env=own))
+
+    def test_ordinary_programs_whose_arguments_mention_gh_text_are_not_rescanned(self):
+        for command in ("docker run -e MSG='please run gh pr comment later' img",
+                        "make deploy NOTE='after gh pr comment 7 --body done'",
+                        "npm run task -- 'gh pr comment 1 --body hey'",
+                        "python3 tool.py --msg 'gh pr comment 1 --body hey'",
+                        "echo x | xargs -I{} echo 'gh issue comment {} --body hi'"):
+            with self.subTest(command):
+                self.assertAllowed(self.bash(command))
+
+    def test_a_wrapped_string_that_cannot_be_parsed_is_denied(self):
+        self.assertDenied(self.bash(f"ssh host 'gh pr comment 7 -R {TP} --body \"unclosed'"))
+
+    def test_a_wrapped_post_is_allowed_with_a_receipt_for_its_scope(self):
+        command = f"watch -n 1 '{self.POST}'"
+        self.record(body="x", command=command)
+        self.assertAllowed(self.bash(command))
+
+
+class TestBuild7Api(ShellCase):
+    NONE = {"OUTBOUND_GATE_OWNED": "none/*"}
+
+    def test_an_endpoint_built_by_the_shell_is_denied_for_writes(self):
+        for command in (
+            f"EP=repos/{TP}/issues/1/comments; gh api \"$EP\" -f body=x",
+            f"K=issues/1/comments; gh api \"repos/{TP}/$K\" -f body=x",
+            "gh api \"$EP\" -f body=x",
+            "gh api \"$(echo repos/a/b/issues/1/comments)\" -f body=x",
+            "gh api \"$EP\" -X PATCH --input payload.json",
+        ):
+            with self.subTest(command):
+                self.assertDenied(self.bash(command, env=self.NONE))
+
+    def test_a_literal_variable_endpoint_is_expanded_and_can_be_unlocked(self):
+        command = f"EP=repos/{TP}/issues/1/comments; gh api \"$EP\" -f body=x"
+        self.assertDenied(self.bash(command))
+        self.record(body="x", command=command)
+        self.assertAllowed(self.bash(command))
+
+    def test_a_variable_repo_under_an_owned_owner_is_allowed(self):
+        own = {"OUTBOUND_GATE_OWNED": "github.com/myorg/*"}
+        self.assertAllowed(self.bash("gh api -X PUT \"repos/myorg/$r/automated-security-fixes\"", env=own))
+        self.assertDenied(self.bash("gh api -X PUT \"repos/otherorg/$r/issues/1/comments\" -f body=x", env=own))
+        self.assertDenied(self.bash("gh api -X PUT \"repos/$o/$r/issues/1/comments\" -f body=x", env=own))
+
+    def test_reads_through_a_variable_endpoint_stay_allowed(self):
+        self.assertAllowed(self.bash("gh api \"$EP\"", env=self.NONE))
+        self.assertAllowed(self.bash("gh api \"$EP\" -X GET", env=self.NONE))
+
+    def test_graphql_roots_hidden_by_commas_comments_aliases_or_spreads_are_denied(self):
+        safe = 'resolveReviewThread(input:{threadId:"t"}){clientMutationId}'
+        bad = {
+            "comma": f'mutation {{ {safe} addComment(,input:{{subjectId:"X", body:"y"}}) {{ clientMutationId }} }}',
+            "comment": f'mutation {{ {safe} addComment( # note\n input:{{subjectId:"X", body:"y"}}) {{ clientMutationId }} }}',
+            "alias": f'mutation {{ {safe} x: addComment(input:{{subjectId:"X", body:"y"}}) {{ clientMutationId }} }}',
+            "spread": f'mutation {{ {safe} ...F }} fragment F on Mutation {{ addComment(input:{{subjectId:"X", body:"y"}}) {{ clientMutationId }} }}',
+            "variables": 'mutation($i: AddCommentInput!) { addComment(input: $i) { clientMutationId } }',
+            "second_operation": f'mutation A {{ {safe} }} mutation B {{ addComment(input:{{subjectId:"X", body:"y"}}) {{ clientMutationId }} }}',
+        }
+        for name, query in bad.items():
+            with self.subTest(name):
+                (self.work / "q.graphql").write_text(query)
+                self.assertDenied(self.bash(f"gh api graphql -F query=@{self.work}/q.graphql", env=self.NONE))
+
+    def test_graphql_is_recognised_on_any_path_ending_in_graphql(self):
+        mutation = 'mutation { addComment(input:{subjectId:"X", body:"y"}) { clientMutationId } }'
+        for endpoint in ("graphql", "api/graphql", "https://ghe.example.test/api/graphql", "/graphql"):
+            with self.subTest(endpoint):
+                self.assertDenied(self.bash(f"gh api {endpoint} -f query='{mutation}'", env=self.NONE))
+
+    def test_graphql_mutations_known_to_carry_no_text_still_pass(self):
+        for query in ('mutation { resolveReviewThread(input:{threadId:"t"}){clientMutationId} }',
+                      'mutation { a: resolveReviewThread(input:{threadId:"t"}){id}, b: unresolveReviewThread(input:{threadId:"u"}){id} }',
+                      'query { viewer { login } }'):
+            with self.subTest(query):
+                (self.work / "q.graphql").write_text(query)
+                self.assertAllowed(self.bash(f"gh api graphql -F query=@{self.work}/q.graphql", env=self.NONE))
+
+
+class TestBuild7Curl(ShellCase):
+    NONE = {"OUTBOUND_GATE_OWNED": "myorg/none-*"}
+    GH = f"https://api.github.com/repos/{TP}/issues/1/comments"
+
+    def test_write_shaped_curl_and_wget_to_a_third_party_api_are_denied(self):
+        forms = [
+            f"curl -s -X POST -H \"Authorization: token $T\" {self.GH} -d '{{\"body\":\"x\"}}'",
+            f"curl -d '{{\"body\":\"x\"}}' {self.GH}",
+            f"curl --json '{{\"body\":\"x\"}}' {self.GH}",
+            f"curl -F body=x {self.GH}",
+            f"curl -T notes.txt {self.GH}",
+            f"curl -XPOST {self.GH}",
+            f"curl --request PATCH {self.GH}",
+            f"curl --data-binary @body.json {self.GH}",
+            f"wget --post-data='x' {self.GH}",
+            f"wget --method=PATCH --body-data=x {self.GH}",
+            f"wget --post-file=body.json {self.GH}",
+            "curl -X PATCH https://ghe.example.test/api/v3/repos/o/r/issues/1 -d x",
+            "curl -X POST https://codeberg.example.test/api/v1/repos/o/r/issues/1/comments -d x",
+            "curl -X POST https://api.github.com/graphql -d x",
+            "curl -d x \"$URL\"",
+            "curl -d x \"https://$HOST/api/v1/repos/o/r/issues/1/comments\"",
+            f"curl -X POST {self.GH.replace('https://', '')} -d x",
+            f"curl -d @body {self.GH.replace('api.github.com', 'api.github.com.')}",
+            f"curl -d @body {self.GH.replace('https://', '//')}",
+            f"curl -d @body {self.GH.replace('api.github.com', 'API.GitHub.com.')}",
+            "curl -d @body https://ghe.example.test./api/v3/repos/o/r/issues/1/comments",
+        ]
+        for command in forms:
+            with self.subTest(command):
+                self.assertDenied(self.bash(command, env=self.NONE))
+
+    def test_reads_other_hosts_and_owned_repos_are_allowed(self):
+        own = {"OUTBOUND_GATE_OWNED": "github.com/myorg/*"}
+        for command, env in (
+            (f"curl -s {self.GH}", self.NONE),
+            (f"curl -sL -X GET {self.GH}", self.NONE),
+            ("curl -L -o x.tgz https://github.com/o/r/archive/main.tar.gz", self.NONE),
+            ("curl -d x https://hooks.example.test/service", self.NONE),
+            ("curl -d x https://example.test/$PATH_VAR", self.NONE),
+            ("curl -s -X POST http://127.0.0.1:$p/api/explore/add -d x", self.NONE),
+            ("wget https://example.test/f.tgz", self.NONE),
+            ("curl -X POST https://api.github.com/repos/myorg/x/issues/1/comments -d x", own),
+        ):
+            with self.subTest(command):
+                self.assertAllowed(self.bash(command, env=env))
+
+
+class TestBuild7Nits(ShellCase):
+    def git_repo(self, name, url):
+        path = self.tmp / name
+        subprocess.run(["git", "init", "-q", str(path)], check=True)
+        subprocess.run(["git", "-C", str(path), "remote", "add", "origin", url], check=True)
+        return path
+
+    def test_many_cwd_calls_finish_in_time_and_still_deny_the_third_party_post(self):
+        owned = self.git_repo("owned", "git@github.com:myorg/tools.git")
+        command = "gh pr comment 1 --body x; " * 1500 + f"gh pr comment 7 -R {TP} --body x"
+        start = time.perf_counter()
+        r = self.bash(command, cwd=owned)
+        self.assertLess(time.perf_counter() - start, 9.0)
+        self.assertDenied(r)
+
+    def test_a_server_that_is_not_github_or_forgejo_cannot_borrow_an_owned_github_name(self):
+        tool_input = dict(owner="myorg", repo="r", issue_number=1, body="x")
+        self.assertDenied(self.mcp("mcp__gitea__create_issue_comment", tool_input))
+        self.assertAllowed(self.mcp("mcp__github__add_issue_comment", tool_input))
+
+    def test_free_text_issue_fields_are_part_of_the_reviewed_text(self):
+        tool = ("mcp__github__issue_write", dict(method="update", owner="otherorg", repo="widgets", issue_number=1,
+                                                  issue_fields=[{"field_name": "Notes", "value": "free text"}]))
+        self.assertDenied(self.mcp(*tool))
+        self.record(body="free text", tool=tool)
+        self.assertAllowed(self.mcp(*tool))
+        edited = dict(tool[1], issue_fields=[{"field_name": "Notes", "value": "other text"}])
+        self.assertDenied(self.mcp(tool[0], edited))
+
+    def test_terminal_cwd_may_be_relative_or_use_a_tilde(self):
+        self.git_repo("owned2", "git@github.com:myorg/tools.git")
+        for cwd in ("~/owned2", "owned2"):
+            with self.subTest(cwd):
+                payload = {"hook_event_name": "PreToolUse", "tool_name": "mcp__terminal__run_in_terminal",
+                           "tool_input": {"command": "gh pr comment 7 --body x", "cwd": cwd}, "cwd": str(self.tmp)}
+                self.assertAllowed(self.hook(payload))
 
 
 class TestHelperRobustness(GateCase):

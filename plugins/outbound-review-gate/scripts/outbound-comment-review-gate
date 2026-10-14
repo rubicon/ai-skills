@@ -37,18 +37,26 @@ third-party repo, because no receipt can vouch for it.
 
 Covered: gh pr/issue/discussion comment, review, create/new, edit, close,
 reopen, merge, revert; gh api writes to issue, pull, comment, review and
-dismissal endpoints and GraphQL mutations that may carry text; the GitHub and
-Forgejo MCP write tools in MCP_FIELDS; any tool whose `command` input is a
-shell line (Bash, Monitor, run_in_terminal); AppleScript `do shell script`.
+dismissal endpoints (an endpoint built by the shell is denied for writes) and
+GraphQL mutations that may carry text; write-shaped curl and wget calls
+(an explicit or implied POST, PATCH or PUT, or any data flag) to api.github.com
+or a Forgejo or GitHub Enterprise /api endpoint, denied unless the repo in the
+URL is owned; the GitHub and Forgejo MCP write tools in MCP_FIELDS; any tool
+whose `command` input is a shell line (Bash, Monitor, run_in_terminal); a gh
+call inside a string handed to watch, tmux, script -c, ssh, osascript -e, git -c
+alias or git rebase --exec, vim -c, bash -c, eval or env -S; AppleScript `do
+shell script`.
 
-Not covered, by design: git push and commit messages, releases, gists, curl or
-scripts that call the API directly, a script file or stdin script that contains
-the gh call, a command that rewrites the body file after this hook has read it,
-text typed through a browser or desktop automation, and a subagent that records
-a receipt it did not earn. The gate stops forgetting and casual self-approval;
-it is not a sandbox.
+Not covered, by design: git push and commit messages, releases, gists, other
+scripts that call the API directly (including python -c, which is denied only
+when it spells out a gh pr/issue call), a script file or stdin script that
+contains the gh call, a command that rewrites the body file after this hook has
+read it, text typed through a browser or desktop automation, and a subagent
+that records a receipt it did not earn. The gate stops forgetting and casual
+self-approval; it is not a sandbox.
 """
 
+import bisect
 import fnmatch
 import functools
 import hashlib
@@ -58,6 +66,7 @@ import re
 import shlex
 import stat
 import sys
+import time
 from collections import namedtuple
 
 DEFAULT_OWNED = ""
@@ -66,6 +75,7 @@ DEFAULT_FORGEJO_HOST = "forgejo"
 MAX_COMMAND = 256 * 1024
 MAX_TEXT = 1024 * 1024
 MAX_DEPTH = 4
+BUDGET_SECONDS = 6.0  # the hook is cut off at 10 s and a cut-off hook lets the call through; fail closed first
 
 Post = namedtuple("Post", "repos title body problem guard action target", defaults=(None, "", ""))
 
@@ -83,6 +93,7 @@ class Ctx:
         self.moved = False
         self.mentions_gated = False
         self.text = ""
+        self.deadline = time.monotonic() + BUDGET_SECONDS
         self.aliases = set()
         self.vars = {}
         self.autoexport = False
@@ -189,23 +200,30 @@ def remote_repo(url):
     return found or "unparsed/" + url
 
 
-def cwd_repos(ctx):
-    """Repos gh would act on from the cwd: the `gh repo set-default` remote if one is marked, else every remote."""
-    if ctx.moved:
-        return []
+@functools.lru_cache(maxsize=64)
+def _remote_config(cwd):
+    """`git config` remote lines for a checkout, or None. Cached: a command can name gh thousands of times."""
     import subprocess
 
     try:
         out = subprocess.run(
-            ["git", "-C", ctx.cwd or os.getcwd(), "config", "--get-regexp", r"^remote\..*\.(url|gh-resolved)$"],
+            ["git", "-C", cwd, "config", "--get-regexp", r"^remote\..*\.(url|gh-resolved)$"],
             capture_output=True, text=True, timeout=3,
         )
     except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout if out.returncode == 0 else None
+
+
+def cwd_repos(ctx):
+    """Repos gh would act on from the cwd: the `gh repo set-default` remote if one is marked, else every remote."""
+    if ctx.moved:
         return []
-    if out.returncode != 0:
+    stdout = _remote_config(ctx.cwd or os.getcwd())
+    if stdout is None:
         return []
     urls, marked = {}, {}
-    for line in out.stdout.splitlines():
+    for line in stdout.splitlines():
         key, _, value = line.partition(" ")
         name, _, kind = key[len("remote."):].rpartition(".")
         (urls if kind == "url" else marked)[name] = value.strip()
@@ -478,7 +496,11 @@ def gh_command(args, ctx, env):
             raise Unverifiable("the comment has no --body or --body-file")
         if not canonical(title, body):
             return []
-        return [Post(repos, title, body, None, None, key, selector_target(positional))]
+        action = key
+        if key == "pr review":
+            mode = next((b for b in ("--approve", "--comment", "--request-changes") if b in bools), None)
+            action = f"pr review {mode}" if mode else key
+        return [Post(repos, title, body, None, None, action, selector_target(positional))]
     except Unverifiable as exc:
         return [Post(repos, None, None, str(exc))]
 
@@ -532,6 +554,87 @@ def api_text(values, ctx):
     return join(parts["title"]), join(parts["body"])
 
 
+def graphql_mutation_roots(query):
+    """(is there a mutation operation, its root fields) for a GraphQL document; the roots are None when one cannot
+    be read (a fragment spread). Strings and comments are blanked and commas dropped first, as GraphQL ignores
+    them."""
+    out, i, n = [], 0, len(query)
+    while i < n:
+        c = query[i]
+        if query.startswith('"""', i):
+            j = query.find('"""', i + 3)
+            i = n if j < 0 else j + 3
+            out.append(' ""')
+        elif c == '"':
+            i += 1
+            while i < n and query[i] != '"':
+                i += 2 if query[i] == "\\" else 1
+            i += 1
+            out.append(' ""')
+        elif c == "#":
+            j = query.find("\n", i)
+            i = n if j < 0 else j
+        else:
+            out.append(" " if c == "," else c)
+            i += 1
+    text = "".join(out)
+    roots, depth, last, start, mutation = set(), 0, 0, 0, False
+    for pos, c in enumerate(text):
+        if c == "{":
+            if depth == 0:
+                header, start = text[last:pos], pos
+            depth += 1
+        elif c == "}":
+            depth = max(depth - 1, 0)
+            if depth == 0:
+                last = pos + 1
+                if re.match(r"\s*mutation\b", header, re.I):
+                    mutation = True
+                    found = _top_fields(text[start:pos + 1])
+                    if found is None:
+                        return True, None
+                    roots |= found
+    return mutation, roots
+
+
+def _top_fields(selection):
+    """Field names at the top level of one `{ ... }` selection set, aliases resolved, or None on a spread."""
+    flat, brace, paren = [], 0, 0
+    for c in selection:
+        if c == "{":
+            brace += 1
+            flat.append(" ")
+        elif c == "}":
+            brace -= 1
+            flat.append(" ")
+        elif c == "(":
+            paren += 1
+            flat.append(" ")
+        elif c == ")":
+            paren -= 1
+            flat.append(" ")
+        else:
+            flat.append(c if brace == 1 and paren == 0 else " ")
+    tokens = re.findall(r"\.\.\.|[A-Za-z_]\w*|:|@", "".join(flat))
+    fields, k = set(), 0
+    while k < len(tokens):
+        tok = tokens[k]
+        if tok == "...":
+            return None
+        if tok == "@":
+            k += 2
+        elif tok == ":":
+            k += 1
+        elif k + 1 < len(tokens) and tokens[k + 1] == ":":
+            if k + 2 < len(tokens):
+                fields.add(tokens[k + 2].lower())
+            k += 3
+        else:
+            fields.add(tok.lower())
+            k += 1
+    return fields
+
+
 def graphql_check(values, ctx):
     """Queries pass. A mutation passes only if every root field is known to carry no text."""
     if values.get("--input"):
@@ -542,8 +645,8 @@ def graphql_check(values, ctx):
             if key != "query":
                 continue
             query = read_text(val[1:], ctx) if typed and val.startswith("@") else check_inline(val)
-            if re.search(r"\bmutation\b", query, re.I):
-                roots = {m.lower() for m in re.findall(r"\b(\w+)\s*\(\s*input\s*:", query)}
+            mutation, roots = graphql_mutation_roots(query)
+            if mutation:
                 allowed = SAFE_MUTATIONS | ({"updateprojectv2itemfieldvalue"} if PROJECT_CHOICE_RE.search(query) else set())
                 if not roots or not roots <= allowed:
                     raise Unverifiable("this GraphQL mutation may carry text, which cannot be reviewed; post it with gh pr comment, gh issue comment or a REST endpoint instead")
@@ -562,7 +665,7 @@ def gh_api(args, ctx, env):
     method = method.upper() if method else ("POST" if values.get("--field") or values.get("--raw-field") or values.get("--input") else "GET")
     if method not in ("POST", "PATCH", "PUT"):
         return []
-    endpoint = positional[0] if positional else ""
+    endpoint = expand_vars(positional[0], ctx) if positional else ""
     host = (values.get("--hostname") or [None])[-1]
     m = re.match(r"^https?://([^/]+)/(.*)$", endpoint)
     if m:
@@ -572,6 +675,12 @@ def gh_api(args, ctx, env):
     segs = path.split("/")
     repos = []
     try:
+        if not is_literal(endpoint):
+            owner_seg = segs[1] if segs[0] == "repos" and len(segs) >= 3 else ""
+            if owner_seg and is_literal(owner_seg) and "{" not in owner_seg and is_owned(
+                    make_repo(host, owner_seg, "any-repo") or ""):
+                return []
+            raise Unverifiable("the endpoint is built by the shell")
         if "%" in path or any(s in (".", "..") for s in segs):
             raise Unverifiable("the endpoint path contains dot segments or encoded characters")
         if segs[0] == "repos" and len(segs) >= 3:
@@ -580,7 +689,7 @@ def gh_api(args, ctx, env):
             else:
                 found = make_repo(host, segs[1], segs[2])
                 repos = [found] if found else []
-        if segs[0] == "graphql":
+        if segs[-1] == "graphql":
             graphql_check(values, ctx)
             return []
         if not {"issues", "pulls", "comments", "reviews"} & set(segs):
@@ -609,9 +718,8 @@ CONTROL_RE = re.compile(r"[\x01-\x04]")
 GATED_TAIL_RE = re.compile(
     r"(?:\s+-{1,2}[\w-]+(?:[ =]\S+)?){0,6}\s+(?:((?:pr|issue|discussion)\s+(?:comment|review|create|new|edit|close|reopen|merge|revert)\b)|api\b)"
 )
-# A function definition's opening; its body is checked for `gh` in a bounded window so the scan stays linear.
+# A function definition's opening; its body runs to the first `}` and is checked for `gh` by position, so the scan stays linear.
 FUNCTION_RE = re.compile(r"\bfunction\s+([A-Za-z_]\w*)[^{;]{0,200}\{|\b([A-Za-z_]\w*)\s*\(\s*\)\s*\{")
-FUNCTION_WINDOW = 8192
 INLINE_ENV_RE = re.compile(r"^(GH_REPO|GH_HOST)=(.*)$", re.S)
 
 
@@ -856,9 +964,18 @@ RG_RUNNERS = ("--pre", "--hostname-bin")
 # resolves to a path in the receipt directory, not when a sentence merely mentions it.
 TEXT_ARGS = {"gh", "git", "echo", "printf", "grep", "egrep", "fgrep", "rg", "ag", "ack"}
 # Commands that only read or display their arguments, so naming the helper or a flag after them is not running it.
-NON_EXEC = {"git", "grep", "egrep", "fgrep", "rg", "ag", "ack", "cat", "bat", "less", "more", "head", "tail", "wc", "stat",
-            "file", "ls", "vim", "vi", "nvim", "nano", "emacs", "code", "open", "cp", "mv", "rm", "ln", "diff", "man",
-            "echo", "printf", "shasum"}
+NON_EXEC = {"grep", "egrep", "fgrep", "rg", "ag", "ack", "cat", "bat", "more", "head", "tail", "wc", "stat", "file",
+            "ls", "code", "open", "rm", "diff", "echo", "printf", "shasum"}
+# Commands that copy a file: copying the helper gives the main thread a renamed copy of it.
+COPIERS = {"cp", "mv", "ln", "install", "rsync", "dd", "ditto", "tar", "zip"}
+# Programs that run a string argument as a shell command; only their arguments are rescanned.
+CARRIERS = {"watch", "tmux", "screen", "script", "ssh", "osascript", "su", "git", "vim", "nvim", "vi", "emacs", "parallel"}
+INTERPRETERS = re.compile(r"^(?:python[\d.]*|node|ruby|perl)$")
+# Commands whose arguments are data or search text, never a shell string to rescan.
+DISPLAY = NON_EXEC | {"gh", "sed", "awk", "tr", "cut", "sort", "uniq", "less", "man", "jq", "tee", "curl", "wget",
+                      "pbcopy", "base64", "xxd", "tar", "zip", "unzip"}
+PY_GH_RE = re.compile(r"""["']gh["']\s*,\s*["'](?:pr|issue|discussion)["']\s*,\s*["'](?:comment|review|create|new|edit|close|reopen|merge|revert)["']""")
+HELPER_ARGS = {"disposition", "hash", "--help", "-h"}
 
 
 INTERPRETER_RE = re.compile(r"^(?:[bzdk]?a?sh|python[\d.]*|perl|ruby|node|source|\.|eval)$")
@@ -1008,6 +1125,141 @@ def change_dir(base, args, ctx):
     ctx.cwd = os.path.normpath(os.path.join(ctx.cwd or os.getcwd(), target))
 
 
+def main_thread_helper_use(toks, expanded, base, word, rest, ctx):
+    """True when the main thread (no agent_id) runs the helper for anything but disposition, hash or help.
+
+    An allowlist: the first argument after the helper must be one of those words, literally. An argument that
+    holds a variable, a substitution or $'...' quoting counts as `record`. Copying the helper, running a shell
+    or interpreter fed the helper's name on stdin, and a command word that no variable resolves while the
+    helper's own flags are present all count as running it."""
+    if any(t == "--reviewer-model" or t.startswith("--reviewer-model=") for t in toks) and base not in NON_EXEC:
+        return True
+    if "--verdict" in toks and "--findings" in toks and base not in NON_EXEC:
+        return True
+    if {"--help", "-h"} & set(toks) and base not in COPIERS:
+        return False
+    at = [j for j, t in enumerate(expanded) if not ASSIGN_RE.match(toks[j]) and os.path.basename(restore(t)) == HELPER]
+    if base in COPIERS and at:
+        return True
+    if base not in NON_EXEC:
+        for j in at:
+            if j + 1 < len(toks):
+                arg = expanded[j + 1]
+                if not is_literal(arg) or arg not in HELPER_ARGS:
+                    return True
+        if not is_literal(expand_vars(word, ctx)) and ("--verdict" in toks or "--findings" in toks):
+            return True
+    return reads_a_script(base, rest) and runs_record(ctx.text)
+
+
+def rescan_arguments(toks, i, base, ctx, depth):
+    """A string argument that another program runs as a shell command (watch, tmux, script -c, ssh, git -c alias,
+    git rebase --exec, vim -c, osascript -e) is scanned like a command of its own."""
+    posts = []
+    if base not in CARRIERS and not INTERPRETERS.match(base):
+        return posts
+    for j in range(i + 1, len(toks)):
+        tok = toks[j]
+        if " " not in tok and "\n" not in tok:
+            continue
+        if base == "git" and not (toks[j - 1] in ("-c", "--exec", "-x") or "=!" in tok or tok.startswith("!")):
+            continue
+        plain = restore(tok)
+        text = tok.split("=!", 1)[1] if "=!" in tok else tok
+        text = text.lstrip("!")
+        if INTERPRETERS.match(base):
+            if PY_GH_RE.search(plain):
+                posts.append(Post([], None, None, "a gated gh call inside an argument string cannot be verified"))
+        elif "do shell script" in plain:
+            posts += applescript_posts(plain, ctx)
+        elif looks_like_gated(text) or runs_record(plain):
+            try:
+                posts += scan(text, ctx, depth + 1)
+            except Exception:
+                posts.append(Post([], None, None, "a gated gh call inside an argument string could not be parsed"))
+    return posts
+
+
+CURL_VALUE_FLAGS = {"curl": "HoAuebcmwxKErDCyYzQ", "wget": "OPoeUtTwlQiBIXAaC"}
+CURL_DATA_FLAGS = {"--data", "--data-raw", "--data-binary", "--data-urlencode", "--data-ascii", "--json", "--form",
+                   "--form-string", "--upload-file", "--post-data", "--post-file", "--body-data", "--body-file"}
+HTTP_WRITES = {"POST", "PATCH", "PUT"}
+
+
+def http_target(url):
+    """(is it a GitHub or Forgejo API URL, the repo it names or None) for a literal URL."""
+    m = re.match(r"^(?:[a-z][a-z0-9+.-]*:)?(?://)?(?:[^/@]*@)?([^/:?#]+)(?::\d+)?(/[^?#]*)?", url, re.I)
+    if not m:
+        return False, None
+    host, path = m.group(1).lower().rstrip("."), m.group(2) or "/"
+    if host == "api.github.com":
+        found = re.match(r"^/repos/([^/]+)/([^/]+)", path)
+        return True, (make_repo("github.com", *found.groups()) if found else None)
+    found = re.match(r"^/api/(?:v1|v3)/repos/([^/]+)/([^/]+)", path)
+    if found:
+        return True, make_repo(host, *found.groups())
+    return bool(re.match(r"^/(?:api/(?:v1|v3|graphql)|graphql)(?:/|$)", path)), None
+
+
+def curl_posts(base, args, ctx):
+    """Write-shaped curl and wget calls to a GitHub or Forgejo API: gated by the repo the URL names. Their text
+    cannot be reviewed, so a call to a repo that is not owned is denied. Reads and other hosts pass."""
+    write, get_mode, method, urls, k = False, False, None, [], 0
+    value_flags = CURL_VALUE_FLAGS[base]
+    while k < len(args):
+        tok, k = args[k], k + 1
+        if tok.startswith("--"):
+            name, eq, val = tok.partition("=")
+            takes_value = not eq
+            if name in ("--request", "--method"):
+                method = (val if eq else (args[k] if k < len(args) else "")).upper()
+            elif name in CURL_DATA_FLAGS:
+                write = True
+            elif name == "--get":
+                get_mode, takes_value = True, False
+            elif name == "--url":
+                urls.append(val if eq else (args[k] if k < len(args) else ""))
+            else:
+                takes_value = False
+            if takes_value:
+                k += 1
+        elif tok.startswith("-") and len(tok) > 1:
+            for pos, c in enumerate(tok[1:], 1):
+                glued = tok[pos + 1:]
+                if c == "X" and base == "curl":
+                    method = (glued or (args[k] if k < len(args) else "")).upper()
+                    k += 0 if glued else 1
+                    break
+                if c in "dFT" and base == "curl":
+                    write = True
+                    k += 0 if glued else 1
+                    break
+                if c == "G":
+                    get_mode = True
+                if c in value_flags:
+                    k += 0 if glued else 1
+                    break
+        else:
+            urls.append(tok)
+    write = (write and not (get_mode and method not in HTTP_WRITES)) or method in HTTP_WRITES
+    if not write:
+        return []
+    posts = []
+    for raw in urls:
+        url = expand_vars(raw, ctx)
+        if is_literal(url):
+            api, repo = http_target(url)
+            if api:
+                posts.append(Post([repo] if repo else [], None, None,
+                                  "a direct HTTP write to a GitHub or Forgejo API cannot be reviewed; use gh or the MCP tools"))
+        else:
+            host = re.match(r"^(?:[a-z][a-z0-9+.-]*:)?(?://)?([A-Za-z0-9.-]+)(?::[^/]*)?(?:/|$)", url)
+            if not (host and host.group(1).lower().rstrip(".") != "api.github.com"
+                    and not re.search(r"/api/(?:v1|v3)\b|/repos/|graphql", url, re.I)):
+                posts.append(Post([], None, None, "the URL of this HTTP write is built by the shell"))
+    return posts
+
+
 def simple_command(toks, ctx, depth):
     i = 0
     while i < len(toks) and (ASSIGN_RE.match(toks[i]) or toks[i] in RESERVED):
@@ -1019,15 +1271,10 @@ def simple_command(toks, ctx, depth):
     word = toks[i]
     base = os.path.basename(word)
     rest = toks[i + 1:]
-    names = {os.path.basename(t) for t in toks if not ASSIGN_RE.match(t)}
+    expanded = [expand_vars(t, ctx) for t in toks]
+    names = {os.path.basename(restore(t)) for t in expanded if not ASSIGN_RE.match(t)}
     helper_call = HELPER in names and base not in NON_EXEC
-    if not ctx.agent and base not in NON_EXEC and not {"--help", "-h"} & set(toks) and (
-        any(t == "--reviewer-model" or t.startswith("--reviewer-model=") for t in toks)
-        or (helper_call and "record" in toks)
-    ):
-        return [guard_post(RECORD_REASON)]
-    if (not ctx.agent and not {"--help", "-h"} & set(toks) and reads_a_script(base, rest)
-            and runs_record(ctx.text)):
+    if not ctx.agent and main_thread_helper_use(toks, expanded, base, word, rest, ctx):
         return [guard_post(RECORD_REASON)]
     if not helper_call and not read_only(base, rest) and any(touches_receipts(t, ctx, embedded=base not in TEXT_ARGS) for t in set(toks)):
         return [guard_post(WRITE_REASON)]
@@ -1046,6 +1293,8 @@ def simple_command(toks, ctx, depth):
         return []
     if base in ("echo", "printf"):
         return []
+    if base in ("curl", "wget"):
+        return curl_posts(base, rest, ctx)
     posts = []
     if ANSI_C in word and PAIR_RE.search(" ".join(rest)):
         posts.append(Post([], None, None, "the command name uses $'...' quoting"))
@@ -1071,6 +1320,8 @@ def simple_command(toks, ctx, depth):
             posts += gh_command(args, ctx, dict(ctx.env))
     if depth >= MAX_DEPTH:
         return posts
+    if base not in DISPLAY and gh_at is None:
+        posts += rescan_arguments(toks, i, base, ctx, depth)
     for j, tok in enumerate(toks):
         name = os.path.basename(tok)
         if name not in SHELLS and name not in ("eval", "env"):
@@ -1102,8 +1353,10 @@ def run_text(text, ctx, depth):
     posts, scopes = [], []
     items = split_commands(text)
     for k, item in enumerate(items):
+        if time.monotonic() > ctx.deadline:
+            raise Unverifiable("the command took too long to analyse")
         if isinstance(item, tuple):
-            if touches_receipts(item[1], ctx, embedded=False):
+            if touches_receipts(item[1], ctx):
                 posts.append(guard_post(WRITE_REASON))
         elif item == "(":
             scopes.append((ctx.cwd, ctx.moved))
@@ -1123,9 +1376,13 @@ def scan(command, ctx, depth=0):
     subs = []
     top = preprocess(command, subs)
     everything = top + "\n" + "\n".join(subs)
+    braces = [m.start() for m in re.finditer("}", everything)]
+    gh_at = [m.start() for m in GH_TEXT_RE.finditer(everything)]
     for m in FUNCTION_RE.finditer(everything):
-        body = everything[m.end():m.end() + FUNCTION_WINDOW].split("}", 1)[0]
-        if "gh" in body and GH_TEXT_RE.search(body):
+        k = bisect.bisect_left(braces, m.end())
+        end = braces[k] if k < len(braces) else len(everything)
+        j = bisect.bisect_left(gh_at, m.end())
+        if j < len(gh_at) and gh_at[j] < end:
             ctx.aliases.add(m.group(1) or m.group(2))
     posts = run_text(top, ctx, depth)
     for inner in subs:
@@ -1147,7 +1404,9 @@ def looks_like_gated(text):
 
 def mentions_guarded_things(command):
     plain = re.sub(r"[\\'\"]", "", command)
-    return HELPER in plain or "--reviewer-model" in plain or mentions_receipts(plain)
+    return (HELPER in plain or "--reviewer-model" in plain or ("--verdict" in plain and "--findings" in plain)
+            or mentions_receipts(plain)
+            or bool(re.search(r"\b(?:curl|wget)\b", plain)))
 
 
 def bash_posts(command, ctx):
@@ -1206,7 +1465,7 @@ MCP_FIELDS = {
 }
 
 
-MCP_TARGETS = ("issue_number", "pullNumber", "pull_number", "index", "comment_id", "id", "number")
+MCP_TARGETS = ("issue_number", "pullNumber", "pull_number", "index", "number", "comment_id", "commentId", "id")
 
 
 def mcp_posts(name, tool_input):
@@ -1224,6 +1483,11 @@ def mcp_posts(name, tool_input):
     body = tool_input.get(body_field)
     title = title if isinstance(title, str) else None
     body = body if isinstance(body, str) else None
+    fields = tool_input.get("issue_fields")
+    if isinstance(fields, list):
+        values = [f["value"] for f in fields if isinstance(f, dict) and isinstance(f.get("value"), str) and f["value"].strip()]
+        if values:
+            body = "\n\n".join(([body] if body and body.strip() else []) + values)
     inline = tool_input.get("comments")
     if forgejo and isinstance(inline, list):
         extra = [c["body"] for c in inline if isinstance(c, dict) and isinstance(c.get("body"), str)]
@@ -1233,10 +1497,12 @@ def mcp_posts(name, tool_input):
         return []
     host = (os.environ.get("OUTBOUND_GATE_FORGEJO_HOST") or DEFAULT_FORGEJO_HOST) if forgejo else "github.com"
     found = make_repo(host, owner, repo) if has_repo else None
+    if has_repo and not (forgejo or github):
+        found = f"unparsed/{server}/{owner}/{repo}"
     method = tool_input.get("method")
     action = f"{tool} {method}" if isinstance(method, str) and method.isidentifier() else tool
-    target = next((str(tool_input[k]) for k in MCP_TARGETS if isinstance(tool_input.get(k), (int, str))
-                   and not isinstance(tool_input.get(k), bool) and str(tool_input[k]) != ""), "")
+    target = "/".join(str(tool_input[k]) for k in MCP_TARGETS if isinstance(tool_input.get(k), (int, str))
+                      and not isinstance(tool_input.get(k), bool) and str(tool_input[k]) != "")
     return [Post([found] if found else [], title, body, None, None, action, target)]
 
 
@@ -1271,11 +1537,15 @@ def deny_reason(post, key=None):
 
 def collect(name, tool_input, payload):
     cwd = tool_input.get("cwd") if isinstance(tool_input.get("cwd"), str) else payload.get("cwd")
+    if isinstance(cwd, str):
+        cwd = os.path.expanduser(cwd)
+        if not os.path.isabs(cwd) and isinstance(payload.get("cwd"), str):
+            cwd = os.path.join(payload["cwd"], cwd)
     ctx = Ctx(cwd if isinstance(cwd, str) else None, agent=bool(payload.get("agent_id")))
     posts = []
     if name in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
         path = tool_input.get("file_path") or tool_input.get("notebook_path")
-        if isinstance(path, str) and touches_receipts(path, cwd=ctx.cwd, embedded=False):
+        if isinstance(path, str) and touches_receipts(path, cwd=ctx.cwd):
             posts.append(guard_post(WRITE_REASON))
     command, script = tool_input.get("command"), tool_input.get("script")
     if isinstance(command, str):
@@ -1372,7 +1642,8 @@ def cli(argv):
         p = sub.add_parser(name, help=help_text, allow_abbrev=False)
         p.add_argument("--repo", required=name != "disposition", help="HOST/OWNER/REPO exactly as the denial shows it")
         p.add_argument("--action", required=name == "record" or name == "hash",
-                       help='kind of post as the denial shows it, e.g. "pr comment"')
+                       help='kind of post as the denial shows it, e.g. "pr comment"'
+                       + (" (required unless --sha256 is given)" if name == "disposition" else ""))
         p.add_argument("--target", default="", help="PR or issue number (or id, or path) as the denial shows it")
         p.add_argument("--title")
         p.add_argument("--body")

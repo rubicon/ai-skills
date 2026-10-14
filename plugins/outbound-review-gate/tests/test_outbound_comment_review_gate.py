@@ -99,7 +99,7 @@ class GateCase(unittest.TestCase):
 
     def record(self, title=None, body=None, dispositioned=True, verdict="go", model="opus", repo=TP,
                action=None, target=None, command=None, tool=None, env=None):
-        """What a reviewer subagent does (record) and then what the hub does (disposition).
+        """What a reviewer subagent does (record) and then what the posting session does (disposition).
 
         The action and target default to a comment on PR 7; pass the command (or MCP call) to take them from
         the hook's own denial instead."""
