@@ -10,6 +10,7 @@ import json, re, sys
 RT, REC = "(Right Thing)", "(Recommended)"
 MARKER_LIKE = re.compile(r"\((?:right thing|recommended)\)", re.IGNORECASE)
 MAX_PROBLEMS = 4
+MAX_LABEL_ECHO = 80
 
 
 def parse_label(label):
@@ -22,6 +23,18 @@ def parse_label(label):
     if rt:
         s = s[: -len(RT)].rstrip()
     return rt, rec, s
+
+
+def echo(label):
+    """The label as quoted back to the model: whitespace collapsed, long labels cut."""
+    flat = " ".join(label.split())
+    return flat if len(flat) <= MAX_LABEL_ECHO else flat[: MAX_LABEL_ECHO - 3] + "..."
+
+
+def swapped_suffix(label):
+    """True when the label ends in the two markers in the wrong order."""
+    s = label.rstrip()
+    return s.endswith(RT) and s[: -len(RT)].rstrip().endswith(REC)
 
 
 def check_question(n, qn):
@@ -40,9 +53,8 @@ def check_question(n, qn):
         rt, rec, base = parse_label(o["label"])
         parsed.append((rt, rec))
         if MARKER_LIKE.search(base):
-            both = RT in o["label"] and REC in o["label"]
-            hint = f"in the order {RT} {REC}, at the very end" if both else "only at the very end"
-            problems.append(f'{q} option {i} "{o["label"]}": markers must come {hint}, exactly as spelled')
+            hint = f"in the order {RT} {REC}, at the very end" if swapped_suffix(o["label"]) else "only at the very end"
+            problems.append(f'{q} option {i} "{echo(o["label"])}": markers must come {hint}, exactly as spelled')
         if MARKER_LIKE.search(o.get("description") or ""):
             problems.append(f"{q} option {i} description contains a marker; markers go only at the end of labels")
 
@@ -97,8 +109,8 @@ def main():
     shown = "; ".join(problems[:MAX_PROBLEMS])
     more = f" (+{len(problems) - MAX_PROBLEMS} more)" if len(problems) > MAX_PROBLEMS else ""
     reason = (f"right-stuff-guard: {shown}{more}.\n"
-              f"Fix the labels and call AskUserQuestion again. A label ends in {RT}, {REC}, "
-              f"{RT} {REC}, or no marker.")
+              f"Fix the labels and call AskUserQuestion again. A label ends in {RT} (the responsible choice), "
+              f"{REC} (the option advised), {RT} {REC}, or no marker; see the right-stuff skill.")
     json.dump({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                       "permissionDecisionReason": reason}}, sys.stdout)
 

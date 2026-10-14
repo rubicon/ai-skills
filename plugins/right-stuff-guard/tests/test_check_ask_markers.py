@@ -79,26 +79,23 @@ class Passes(unittest.TestCase):
 class Denies(unittest.TestCase):
     def test_no_right_thing_single(self):
         r = deny_reason(hook_input(q([f"Run it {REC}", "Skip it"])))
-        self.assertIn("Q1", r)
-        self.assertIn(RT, r)
+        self.assertIn(f"Q1: exactly one option must end in {RT}, found 0", r)
 
     def test_two_right_things_single(self):
         r = deny_reason(hook_input(q([f"Run it {RT} {REC}", f"Back up {RT}", "Skip"])))
-        self.assertIn("exactly one", r)
+        self.assertIn(f"Q1: exactly one option must end in {RT}, found 2", r)
 
     def test_two_recommended_single(self):
         r = deny_reason(hook_input(q([f"Run it {RT} {REC}", f"Back up {REC}", "Skip"])))
-        self.assertIn(REC, r)
+        self.assertIn(f"Q1: at most one option may end in {REC}, found 2", r)
 
     def test_recommended_not_first(self):
         r = deny_reason(hook_input(q([f"Back up {RT}", f"Run it {REC}", "Skip"])))
-        self.assertIn("option 1", r)
-        self.assertIn(REC, r)
+        self.assertIn(f"Q1: option 1 must end in {REC}", r)
 
     def test_no_recommended_and_right_thing_not_first(self):
         r = deny_reason(hook_input(q(["production database", f"staging database {RT}"])))
-        self.assertIn("option 1", r)
-        self.assertIn(RT, r)
+        self.assertIn(f"Q1: option 1 must end in {RT} when no option ends in {REC}", r)
 
     def test_marker_in_the_middle_of_a_label(self):
         r = deny_reason(hook_input(q([f"Run {REC} it now {RT}", "Skip"])))
@@ -106,7 +103,31 @@ class Denies(unittest.TestCase):
 
     def test_wrong_marker_order(self):
         r = deny_reason(hook_input(q([f"Pin it {REC} {RT}", "Float it"])))
-        self.assertIn("order", r)
+        self.assertIn(f"in the order {RT} {REC}, at the very end", r)
+
+    def test_both_marker_strings_quoted_mid_label_get_the_position_hint(self):
+        r = deny_reason(hook_input(q([f"Use the '{RT} {REC}' preset {RT}", "Skip"])))
+        self.assertIn("only at the very end", r)
+        self.assertNotIn("in the order", r)
+
+    def test_long_label_is_truncated_in_the_reason(self):
+        r = deny_reason(hook_input(q([f"{'x' * 300} {REC} tail", "Skip"])))
+        self.assertNotIn("x" * 100, r)
+        self.assertIn("...", r)
+
+    def test_newlines_in_a_label_do_not_split_the_reason(self):
+        r = deny_reason(hook_input(q([f"Line one\nline two {REC} tail", "Skip"])))
+        self.assertEqual(len(r.splitlines()), 2)
+
+    def test_more_than_four_problems_are_counted(self):
+        r = deny_reason(hook_input(*[q(["A", "B"]) for _ in range(6)]))
+        self.assertIn("Q4", r)
+        self.assertNotIn("Q5", r)
+        self.assertIn("(+2 more)", r)
+
+    def test_reason_says_what_the_markers_mean(self):
+        r = deny_reason(hook_input(q(["A", "B"])))
+        self.assertIn("right-stuff skill", r)
 
     def test_lowercase_marker(self):
         r = deny_reason(hook_input(q([f"Pin it {RT}", "Float it (recommended)"])))
@@ -127,11 +148,11 @@ class Denies(unittest.TestCase):
 
     def test_multi_select_no_right_thing(self):
         r = deny_reason(hook_input(q([f"Lint {REC}", "Format", "Type-check"], multi=True)))
-        self.assertIn("at least one", r)
+        self.assertIn(f"Q1: at least one option must end in {RT}", r)
 
     def test_multi_select_three_options_all_marked(self):
         r = deny_reason(hook_input(q([f"Lint {RT} {REC}", f"Format {RT}", f"Type-check {REC}"], multi=True)))
-        self.assertIn("unmarked", r)
+        self.assertIn("Q1: with three or more options, leave at least one unmarked", r)
 
     def test_second_question_named(self):
         r = deny_reason(hook_input(q([f"A {RT} {REC}", "B"]), q(["C", "D"])))

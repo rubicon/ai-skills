@@ -1,7 +1,7 @@
 {
   "name": "right-stuff-guard",
   "version": "0.1.0",
-  "description": "A PreToolUse hook that denies an AskUserQuestion call whose option labels break the right-stuff marker rules, so the model corrects them and retries.",
+  "description": "A PreToolUse hook that denies an AskUserQuestion call whose option labels break the right-stuff marker rules, so the model fixes them and asks again.",
   "author": { "name": "Dax Davis" },
   "homepage": "https://github.com/rubicon/ai-skills",
   "license": "MIT",

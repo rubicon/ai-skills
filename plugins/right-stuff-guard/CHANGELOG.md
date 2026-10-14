@@ -9,5 +9,5 @@ Versions use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- PreToolUse hook for `AskUserQuestion` with `scripts/check-ask-markers.py`. It denies a call whose option labels break the right-stuff marker rules and prints one line naming every problem found (the first four, then a count) so the model can fix them in one retry.
-- A call that passes, any other tool, and any input the script cannot read all produce no output, so the normal pop-up appears and a bug in the script never blocks a question.
+- PreToolUse hook for `AskUserQuestion` with `scripts/check-ask-markers.py`. It denies a call whose option labels break the right-stuff marker rules. The reason names the first four problems on one line, with the question and option number for label problems, then a count of any more, so the model can usually fix them in one retry.
+- A call that passes, any other tool, and any input the script cannot read all produce no output, so the normal pop-up appears. A crash in the script never blocks a question either: Claude Code treats a non-blocking hook failure as no decision.
