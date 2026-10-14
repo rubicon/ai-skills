@@ -4,11 +4,12 @@ Every test runs the real script as a subprocess, feeding the PreToolUse JSON on
 stdin exactly as Claude Code does, and reads the real exit code and stdout. The
 script is the only code under test; nothing is mocked.
 
-Run: python3 -m unittest discover -s tests -v   (from the gate directory)
+Run: python3 -m unittest discover -s plugins/outbound-review-gate/tests -v   (from the repository root)
 """
 
 import hashlib
 import json
+import re
 import os
 import shutil
 import statistics
@@ -19,16 +20,17 @@ import unittest
 from pathlib import Path
 
 GATE = Path(__file__).resolve().parent.parent / "scripts" / "outbound-comment-review-gate"
-TP = "MemPalace/mempalace"  # third-party target
-FILE_TEXT = "Found the lease race: the early return skips the clock refresh.\n"
+TP = "otherorg/widgets"  # third-party target
+FILE_TEXT = "Thanks for the report. The retry path now waits for the lock before it reads the file.\n"
 JSON_TEXT = "Body that arrives through --input.\n"
 
 
-TP_KEY = "github.com/mempalace/mempalace"  # how the gate names TP inside a receipt key
+SCOPE = ["--action", "pr comment", "--target", "7"]
+TP_KEY = "github.com/otherorg/widgets"  # how the gate names TP inside a receipt key
 
 
-def sha(title, body, repo=TP_KEY):
-    text = json.dumps([repo, (title or "").rstrip(), (body or "").rstrip()], ensure_ascii=False)
+def sha(title, body, repo=TP_KEY, action="pr comment", target="7"):
+    text = json.dumps([repo, action, target, (title or "").rstrip(), (body or "").rstrip()], ensure_ascii=False)
     return hashlib.sha256(text.encode()).hexdigest()
 
 
@@ -47,7 +49,7 @@ class GateCase(unittest.TestCase):
             "PATH": os.environ["PATH"],
             "HOME": str(self.tmp),
             "OUTBOUND_REVIEW_DIR": str(self.receipts),
-            "OUTBOUND_GATE_OWNED": "github.com/rubicon/*,forgejo/*",
+            "OUTBOUND_GATE_OWNED": "github.com/myorg/*,forgejo/*",
         }
 
     # -- plumbing ---------------------------------------------------------
@@ -83,18 +85,39 @@ class GateCase(unittest.TestCase):
             env=env,
         )
 
-    def record(self, title=None, body=None, dispositioned=True, verdict="go", model="opus", repo=TP):
-        """What a reviewer subagent does (record) and then what the hub does (disposition)."""
-        text = ["--repo", repo]
+    def scope_for(self, command=None, tool=None, env=None):
+        """The repo, action and target a receipt must name for this call, read from the hook's own denial."""
+        env = {**(env or {}), "OUTBOUND_REVIEW_DIR": str(self.tmp / "no-receipts")}
+        if command is not None:
+            r = self.bash(command, env=env)
+        else:
+            r = self.mcp(tool[0], tool[1], env=env)
+        out = json.loads(r.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+        m = re.search(r"scope=(\{.*?\})", out)
+        self.assertTrue(m, out)
+        return json.loads(m.group(1))
+
+    def record(self, title=None, body=None, dispositioned=True, verdict="go", model="opus", repo=TP,
+               action=None, target=None, command=None, tool=None, env=None):
+        """What a reviewer subagent does (record) and then what the hub does (disposition).
+
+        The action and target default to a comment on PR 7; pass the command (or MCP call) to take them from
+        the hook's own denial instead."""
+        if command is not None or tool is not None:
+            got = self.scope_for(command, tool, env)
+            repo, action, target = got["repo"], got["action"], got["target"]
+        action = "pr comment" if action is None else action
+        target = "7" if target is None else target
+        text = ["--repo", repo, "--action", action, "--target", target]
         if title is not None:
             text += ["--title", title]
         if body is not None:
             text += ["--body", body]
-        r = self.run_gate(["record", *text, "--reviewer-model", model, "--verdict", verdict, "--findings", "2"])
+        r = self.run_gate(["record", *text, "--reviewer-model", model, "--verdict", verdict, "--findings", "2"], env=env)
         self.assertEqual(r.returncode, 0, r.stderr)
         key = r.stdout.strip()
         if dispositioned and verdict == "go":
-            d = self.run_gate(["disposition", *text])
+            d = self.run_gate(["disposition", *text], env=env)
             self.assertEqual(d.returncode, 0, d.stderr)
             self.assertEqual(d.stdout.strip(), key)
         return key
@@ -143,7 +166,7 @@ OUTBOUND = [
     ("pr_comment_repo_equals", f"gh pr comment 7 --repo={TP} --body-file {{f}}", None, FILE_TEXT),
     ("pr_comment_repo_long", f"gh pr comment 7 --repo {TP} --body-file {{f}}", None, FILE_TEXT),
     ("pr_comment_R_glued", f"gh pr comment 7 -R{TP} --body-file {{f}}", None, FILE_TEXT),
-    ("pr_comment_url_arg", "gh pr comment https://github.com/MemPalace/mempalace/pull/7 --body-file {f}", None, FILE_TEXT),
+    ("pr_comment_url_arg", "gh pr comment https://github.com/otherorg/widgets/pull/7 --body-file {f}", None, FILE_TEXT),
     ("pr_comment_gh_repo_env", f"GH_REPO={TP} gh pr comment 7 --body-file {{f}}", None, FILE_TEXT),
     (
         "hub_form",
@@ -167,14 +190,14 @@ OUTBOUND = [
     ("pr_review_request_changes", f"gh pr review 7 -R {TP} --request-changes -b 'Needs a test.'", None, "Needs a test."),
     (
         "pr_create_file",
-        f"gh pr create -R {TP} --title 'Fix lease race' --body-file {{f}} --head a --base b",
-        "Fix lease race",
+        f"gh pr create -R {TP} --title 'Fix retry ordering' --body-file {{f}} --head a --base b",
+        "Fix retry ordering",
         FILE_TEXT,
     ),
     (
         "pr_create_inline",
-        f"gh pr create -R {TP} -t 'Fix lease race' -b 'Short body.'",
-        "Fix lease race",
+        f"gh pr create -R {TP} -t 'Fix retry ordering' -b 'Short body.'",
+        "Fix retry ordering",
         "Short body.",
     ),
     ("issue_create", f"gh issue create -R {TP} --title 'Report' --body-file {{f}}", "Report", FILE_TEXT),
@@ -316,8 +339,8 @@ ALLOWED_BASH = [
     "cat <<'EOF'\nit's a note about gh pr comment\nEOF",
     "ls -la /tmp",
     "bash <<'EOF'\ngh pr list --search review-requested:@me\nEOF",
-    "R=rubicon/mnemnon; gh issue create -R \"$R\" --title T --body B",
-    "gh discussion list -R MemPalace/mempalace",
+    "R=myorg/tools; gh issue create -R \"$R\" --title T --body B",
+    "gh discussion list -R otherorg/widgets",
     f"echo \"$(gh pr view 5 -R {TP} --json state -q '\"state=\\(.state)\"')\"",
     f"for n in 1 2; do printf \"PR %s: %s\\n\" \"$n\" \"$(gh pr view $n -R {TP} --json mergeable --jq '\"\\(.mergeable)\"')\"; done",
     f'G="env -u GH_TOKEN gh"; $G pr view 7 -R {TP}; $G api repos/{TP}/pulls/7 --jq .title',
@@ -334,8 +357,8 @@ ALLOWED_BASH = [
     "git commit -m 'docs: explain `gh pr comment` usage'",
     f"git commit -m $'Fix: don\\'t crash' && gh pr view 5 -R {TP}",
     "git commit -m \"$(cat <<'EOF'\nfix: mention gh pr comment (it's fine)\nEOF\n)\"",
-    "gh pr comment 7 -R rubicon/x --body ok  # owned form",
-    "$GH pr comment 7 -R rubicon/x --body ok",
+    "gh pr comment 7 -R myorg/x --body ok  # owned form",
+    "$GH pr comment 7 -R myorg/x --body ok",
     "which gh",
     "brew install gh",
     "command -v gh",
@@ -356,20 +379,21 @@ class TestOutboundForms(GateCase):
     def test_every_form_is_allowed_with_a_receipt_for_its_exact_text(self):
         for name, template, title, body in OUTBOUND + OUTBOUND_HARDENING:
             with self.subTest(name):
-                self.record(title=title, body=body)
+                self.record(title=title, body=body, command=template)
                 self.assertAllowed(self.bash(template))
 
     def test_a_receipt_for_different_text_does_not_allow(self):
         for name, template, title, body in OUTBOUND + OUTBOUND_HARDENING:
             with self.subTest(name):
-                self.record(title=title and title + "!", body=body and body + "!")
+                self.record(title=title and title + "!", body=body and body + "!", command=template)
                 self.assertDenied(self.bash(template))
 
     def test_denial_names_the_hash_and_how_to_record_a_receipt(self):
         reason = self.assertDenied(self.bash(f"gh pr comment 7 -R {TP} --body-file {{f}}"))
         self.assertIn(sha(None, FILE_TEXT), reason)
         self.assertIn("record --help", reason)
-        self.assertIn("dispositioned", reason)
+        self.assertIn("disposition", reason)
+        self.assertIn("scope=", reason)
 
     def test_non_outbound_commands_are_allowed(self):
         for command in ALLOWED_BASH:
@@ -392,7 +416,7 @@ class TestReceiptValidity(GateCase):
         self.assertAllowed(self.bash(self.cmd()))
 
     def test_receipt_recorded_from_file_matches_command_using_same_file(self):
-        text = ["--repo", TP, "--body-file", str(self.body_file)]
+        text = ["--repo", TP, *SCOPE, "--body-file", str(self.body_file)]
         r = self.run_gate(["record", *text, "--reviewer-model", "opus", "--verdict", "go", "--findings", "0"])
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertDenied(self.bash(self.cmd()))  # recorded but not yet dispositioned
@@ -438,7 +462,7 @@ class TestReceiptValidity(GateCase):
         mixed = self.tmp / "mixed"
         mixed.mkdir()
         subprocess.run(["git", "init", "-q", str(mixed)], check=True)
-        subprocess.run(["git", "-C", str(mixed), "remote", "add", "origin", "git@github.com:rubicon/mnemnon.git"], check=True)
+        subprocess.run(["git", "-C", str(mixed), "remote", "add", "origin", "git@github.com:myorg/tools.git"], check=True)
         subprocess.run(["git", "-C", str(mixed), "remote", "add", "upstream", f"git@github.com:{TP}.git"], check=True)
         self.assertIn("-R owner/repo", self.assertDenied(self.bash("gh pr comment 7 --body x", cwd=mixed)))
 
@@ -453,19 +477,19 @@ class TestRepoOwnership(GateCase):
         return f"gh pr comment 7 -R {repo} --body-file {{f}}"
 
     def test_owned_repos_need_no_receipt(self):
-        for repo in ("rubicon/mnemnon", "Rubicon/Mnemnon", "github.com/rubicon/x", "forgejo/rubicon/x"):
+        for repo in ("myorg/tools", "Myorg/Tools", "github.com/myorg/x", "forgejo/myorg/x"):
             with self.subTest(repo):
                 self.assertAllowed(self.bash(self.cmd(repo)))
 
     def test_lookalikes_are_third_party(self):
-        for repo in ("rubicon-evil/x", "MemPalace/rubicon", "notrubicon/x", "evil.com/rubicon/x"):
+        for repo in ("myorg-evil/x", "OtherOrg/myorg", "notmyorg/x", "evil.com/myorg/x"):
             with self.subTest(repo):
                 self.assertDenied(self.bash(self.cmd(repo)))
 
     def test_owned_patterns_can_be_overridden(self):
         env = {"OUTBOUND_GATE_OWNED": "github.com/someoneelse/*"}
         self.assertAllowed(self.bash(self.cmd("someoneelse/x"), env=env))
-        self.assertDenied(self.bash(self.cmd("rubicon/x"), env=env))
+        self.assertDenied(self.bash(self.cmd("myorg/x"), env=env))
 
     def git_repo(self, *remotes):
         repo = self.tmp / "checkout"
@@ -476,13 +500,13 @@ class TestRepoOwnership(GateCase):
         return repo
 
     def test_without_repo_flag_cwd_remotes_decide(self):
-        owned = self.git_repo(("origin", "git@github.com:rubicon/mnemnon.git"))
+        owned = self.git_repo(("origin", "git@github.com:myorg/tools.git"))
         self.assertAllowed(self.bash("gh pr comment 7 --body-file {f}", cwd=owned))
 
     def test_a_third_party_remote_makes_the_checkout_third_party(self):
         repo = self.git_repo(
-            ("origin", "git@github.com:rubicon/mempalace.git"),
-            ("upstream", "https://github.com/MemPalace/mempalace.git"),
+            ("origin", "git@github.com:myorg/app.git"),
+            ("upstream", "https://github.com/otherorg/widgets.git"),
         )
         self.assertDenied(self.bash("gh pr comment 7 --body-file {f}", cwd=repo))
 
@@ -490,11 +514,11 @@ class TestRepoOwnership(GateCase):
         self.assertDenied(self.bash("gh pr comment 7 --body-file {f}", cwd=self.tmp / "work"))
 
     def test_explicit_repo_beats_cwd_remotes(self):
-        owned = self.git_repo(("origin", "git@github.com:rubicon/mnemnon.git"))
+        owned = self.git_repo(("origin", "git@github.com:myorg/tools.git"))
         self.assertDenied(self.bash(self.cmd(TP), cwd=owned))
 
     def test_gh_api_endpoint_repo_decides(self):
-        self.assertAllowed(self.bash("gh api -X POST repos/rubicon/mnemnon/issues/7/comments -f body=ok"))
+        self.assertAllowed(self.bash("gh api -X POST repos/myorg/tools/issues/7/comments -f body=ok"))
         self.assertDenied(self.bash(f"gh api -X POST repos/{TP}/issues/7/comments -f body=ok"))
 
 
@@ -547,8 +571,8 @@ class TestUnverifiableText(GateCase):
             "double_quoted_dollar": f'gh pr comment 7 -R {TP} --body "costs $5"',
             "ansi_c_body": f"gh pr comment 7 -R {TP} --body $'line\\nbreak'",
             "api_graphql_file": "gh api graphql -F query=@mut.graphql",
-            "api_traversal": f"gh api -X POST repos/rubicon/x/../../{TP}/issues/7/comments -f body=x",
-            "url_and_repo_disagree": f"gh pr comment https://github.com/{TP}/pull/7 -R rubicon/mnemnon --body x",
+            "api_traversal": f"gh api -X POST repos/myorg/x/../../{TP}/issues/7/comments -f body=x",
+            "url_and_repo_disagree": f"gh pr comment https://github.com/{TP}/pull/7 -R myorg/tools --body x",
             "unbalanced_quote_in_post": f'gh pr comment 7 -R {TP} --body "never closed',
         }
         for name, command in cases.items():
@@ -560,13 +584,13 @@ class TestUnverifiableText(GateCase):
         self.denied_as_unverifiable(f"gh pr comment 7 -R {TP} --body-file -")
 
     def test_unverifiable_commands_on_owned_repos_are_allowed(self):
-        self.assertAllowed(self.bash("gh pr comment 7 -R rubicon/mnemnon --body-file -"))
-        self.assertAllowed(self.bash("gh pr create -R rubicon/mnemnon --fill"))
+        self.assertAllowed(self.bash("gh pr comment 7 -R myorg/tools --body-file -"))
+        self.assertAllowed(self.bash("gh pr create -R myorg/tools --fill"))
 
 
 class TestMcp(GateCase):
     def test_every_tool_is_gated_on_third_party_repos_and_unlocked_by_its_receipt(self):
-        o, r = "MemPalace", "mempalace"
+        o, r = "OtherOrg", "widgets"
         cases = [
             ("mcp__github__add_issue_comment", dict(owner=o, repo=r, issue_number=7, body="B"), None, "B"),
             (
@@ -609,17 +633,17 @@ class TestMcp(GateCase):
             with self.subTest(name + str(tool_input.get("method", ""))):
                 shutil.rmtree(self.receipts, ignore_errors=True)
                 self.assertDenied(self.mcp(name, tool_input))
-                self.record(title=title, body=body)
+                self.record(title=title, body=body, tool=(name, tool_input))
                 self.assertAllowed(self.mcp(name, tool_input))
                 self.assertDenied(self.mcp(name, {**tool_input, "body": "edited"} if "body" in tool_input
                                            else {**tool_input, "title": "edited"}))
 
     def test_owned_github_owner_is_allowed(self):
-        tool_input = dict(owner="rubicon", repo="mnemnon", issue_number=7, body="B")
+        tool_input = dict(owner="myorg", repo="tools", issue_number=7, body="B")
         self.assertAllowed(self.mcp("mcp__github__add_issue_comment", tool_input))
 
     def test_calls_without_prose_are_allowed(self):
-        o, r = "MemPalace", "mempalace"
+        o, r = "OtherOrg", "widgets"
         cases = [
             ("mcp__github__add_issue_comment", dict(owner=o, repo=r, issue_number=7, reaction="+1")),
             ("mcp__github__issue_write", dict(method="update", owner=o, repo=r, issue_number=3, labels=["bug"])),
@@ -637,34 +661,34 @@ class TestMcp(GateCase):
 
     def test_forgejo_tools_target_the_owned_host_by_default(self):
         cases = [
-            ("mcp__forgejo__create_issue", dict(owner="rubicon", repo="x", title="T", body="B")),
-            ("mcp__forgejo__create_issue_comment", dict(owner="rubicon", repo="x", index=1, body="B")),
-            ("mcp__forgejo__create_pull_request", dict(owner="rubicon", repo="x", title="T", head="a", base="b")),
-            ("mcp__forgejo__create_pull_request_review", dict(owner="rubicon", repo="x", index=1, event="COMMENT", body="B")),
-            ("mcp__forgejo__edit_issue", dict(owner="rubicon", repo="x", index=1, body="B")),
-            ("mcp__forgejo__edit_issue_comment", dict(owner="rubicon", repo="x", id=1, body="B")),
-            ("mcp__forgejo__edit_pull_request", dict(owner="rubicon", repo="x", index=1, title="T")),
+            ("mcp__forgejo__create_issue", dict(owner="myorg", repo="x", title="T", body="B")),
+            ("mcp__forgejo__create_issue_comment", dict(owner="myorg", repo="x", index=1, body="B")),
+            ("mcp__forgejo__create_pull_request", dict(owner="myorg", repo="x", title="T", head="a", base="b")),
+            ("mcp__forgejo__create_pull_request_review", dict(owner="myorg", repo="x", index=1, event="COMMENT", body="B")),
+            ("mcp__forgejo__edit_issue", dict(owner="myorg", repo="x", index=1, body="B")),
+            ("mcp__forgejo__edit_issue_comment", dict(owner="myorg", repo="x", id=1, body="B")),
+            ("mcp__forgejo__edit_pull_request", dict(owner="myorg", repo="x", index=1, title="T")),
         ]
         for name, tool_input in cases:
             with self.subTest(name):
                 self.assertAllowed(self.mcp(name, tool_input))
 
     def test_forgejo_tools_are_gated_when_the_owned_list_excludes_the_host(self):
-        env = {"OUTBOUND_GATE_OWNED": "github.com/rubicon/*"}
-        tool_input = dict(owner="rubicon", repo="x", index=1, body="B")
+        env = {"OUTBOUND_GATE_OWNED": "github.com/myorg/*"}
+        tool_input = dict(owner="myorg", repo="x", index=1, body="B")
         self.assertDenied(self.mcp("mcp__forgejo__create_issue_comment", tool_input, env=env))
-        self.record(body="B", repo="forgejo/rubicon/x")
+        self.record(body="B", tool=("mcp__forgejo__create_issue_comment", tool_input), env=env)
         self.assertAllowed(self.mcp("mcp__forgejo__create_issue_comment", tool_input, env=env))
 
     def test_forgejo_review_inline_comments_are_part_of_the_reviewed_text(self):
-        env = {"OUTBOUND_GATE_OWNED": "github.com/rubicon/*"}
+        env = {"OUTBOUND_GATE_OWNED": "github.com/myorg/*"}
         tool_input = dict(
-            owner="rubicon", repo="x", index=1, event="COMMENT", body="B",
+            owner="myorg", repo="x", index=1, event="COMMENT", body="B",
             comments=[{"path": "a.py", "body": "inline one"}],
         )
-        self.record(body="B", repo="forgejo/rubicon/x")
+        self.record(body="B", tool=("mcp__forgejo__create_pull_request_review", tool_input), env=env)
         self.assertDenied(self.mcp("mcp__forgejo__create_pull_request_review", tool_input, env=env))
-        self.record(body="B\n\ninline one", repo="forgejo/rubicon/x")
+        self.record(body="B\n\ninline one", tool=("mcp__forgejo__create_pull_request_review", tool_input), env=env)
         self.assertAllowed(self.mcp("mcp__forgejo__create_pull_request_review", tool_input, env=env))
 
 
@@ -683,7 +707,7 @@ class TestFailOpenAndMalformed(GateCase):
             "mcp_input_not_object": '{"tool_name": "mcp__github__add_issue_comment", "tool_input": []}',
             "mcp_body_not_string": (
                 '{"tool_name": "mcp__github__add_issue_comment", '
-                '"tool_input": {"owner": "MemPalace", "repo": "mempalace", "body": 5}}'
+                '"tool_input": {"owner": "OtherOrg", "repo": "widgets", "body": 5}}'
             ),
         }
         for name, raw in cases.items():
@@ -701,7 +725,7 @@ class TestFailOpenAndMalformed(GateCase):
 
 class TestRecordHelper(GateCase):
     def test_record_then_disposition_complete_the_receipt(self):
-        text = ["--repo", TP, "--title", "T", "--body", "B"]
+        text = ["--repo", TP, *SCOPE, "--title", "T", "--body", "B"]
         r = self.run_gate(["record", *text, "--reviewer-model", "opus", "--verdict", "go", "--findings", "2"])
         self.assertEqual(r.returncode, 0, r.stderr)
         key = r.stdout.strip()
@@ -728,7 +752,7 @@ class TestRecordHelper(GateCase):
         self.assertIs(data["dispositioned"], True)
 
     def test_disposition_refuses_without_a_go_receipt(self):
-        text = ["--repo", TP, "--body", "B"]
+        text = ["--repo", TP, *SCOPE, "--body", "B"]
         missing = self.run_gate(["disposition", *text])
         self.assertEqual(missing.returncode, 2)
         self.assertIn("no receipt", missing.stderr)
@@ -738,41 +762,58 @@ class TestRecordHelper(GateCase):
         self.assertIn("verdict", refused.stderr)
 
     def test_record_no_longer_accepts_a_self_declared_disposition(self):
-        r = self.run_gate(["record", "--repo", TP, "--body", "B", "--reviewer-model", "opus", "--verdict", "go",
+        r = self.run_gate(["record", "--repo", TP, *SCOPE, "--body", "B", "--reviewer-model", "opus", "--verdict", "go",
                            "--findings", "0", "--dispositioned"])
         self.assertEqual(r.returncode, 2)
 
     def test_hash_subcommand_matches_the_gate_key(self):
-        r = self.run_gate(["hash", "--repo", TP, "--title", "T", "--body-file", str(self.body_file)])
+        r = self.run_gate(["hash", "--repo", TP, *SCOPE, "--title", "T", "--body-file", str(self.body_file)])
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip(), sha("T", FILE_TEXT))
 
     def test_the_key_depends_on_the_repo(self):
-        a = self.run_gate(["hash", "--repo", TP, "--body", "B"]).stdout
-        b = self.run_gate(["hash", "--repo", "other/thing", "--body", "B"]).stdout
-        c = self.run_gate(["hash", "--repo", "github.com/MEMPALACE/Mempalace.git", "--body", "B"]).stdout
+        a = self.run_gate(["hash", "--repo", TP, *SCOPE, "--body", "B"]).stdout
+        b = self.run_gate(["hash", "--repo", "other/thing", *SCOPE, "--body", "B"]).stdout
+        c = self.run_gate(["hash", "--repo", "github.com/OTHERORG/Widgets.git", *SCOPE, "--body", "B"]).stdout
+        self.assertRegex(a, r"^[0-9a-f]{64}$")
         self.assertNotEqual(a, b)
         self.assertEqual(a, c)
 
+    def test_the_key_depends_on_the_action_and_the_target(self):
+        base = ["hash", "--repo", TP, "--body", "B"]
+        keys = {self.run_gate([*base, "--action", a, "--target", t]).stdout
+                for a, t in (("pr comment", "7"), ("pr comment", "8"), ("issue comment", "7"), ("pr merge", "7"),
+                             ("pr comment", ""))}
+        self.assertEqual(len(keys), 5)
+        self.assertNotIn("", keys)
+
     def test_record_requires_repo_text_model_verdict_and_findings(self):
-        base = ["--repo", TP, "--body", "B", "--reviewer-model", "opus", "--verdict", "go", "--findings", "1"]
+        base = ["--repo", TP, "--body", "B", "--reviewer-model", "opus", "--verdict", "go", "--findings", "1",
+                "--action", "pr comment"]
 
         def without(flag):
             args = list(base)
             i = args.index(flag)
             return ["record", *args[:i], *args[i + 2:]]
 
+        def swap(flag, value, new_flag=None):
+            args = list(base)
+            i = args.index(flag)
+            args[i:i + 2] = [new_flag or flag, value]
+            return ["record", *args]
+
         bad = [
             without("--repo"),
+            without("--action"),
             without("--body"),
             without("--reviewer-model"),
             without("--verdict"),
             without("--findings"),
-            ["record", *base[:-2], "--findings", "x"],
-            ["record", "--repo", "not a repo", *base[2:]],
-            ["record", "--repo", "rubicon/../x", *base[2:]],
-            ["record", "--repo", TP, "--body-file", "/nonexistent", *base[4:]],
-            ["record", *base[:6], "--verdict", "maybe", "--findings", "1"],
+            swap("--findings", "x"),
+            swap("--repo", "not a repo"),
+            swap("--repo", "myorg/../x"),
+            swap("--body", "/nonexistent", "--body-file"),
+            swap("--verdict", "maybe"),
         ]
         for args in bad:
             with self.subTest(args):

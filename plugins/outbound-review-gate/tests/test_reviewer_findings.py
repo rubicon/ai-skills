@@ -16,7 +16,7 @@ import tempfile
 import time
 import unittest
 
-from test_outbound_comment_review_gate import FILE_TEXT, GATE, TP, GateCase, sha
+from test_outbound_comment_review_gate import FILE_TEXT, GATE, SCOPE, TP, GateCase, sha
 
 
 class TestReviewerFindings(GateCase):
@@ -29,7 +29,7 @@ class TestReviewerFindings(GateCase):
         return path
 
     def owned(self):
-        return self.repo("owned", ("origin", "git@github.com:rubicon/mnemnon.git"))
+        return self.repo("owned", ("origin", "git@github.com:myorg/tools.git"))
 
     def thirdparty(self):
         return self.repo("tp", ("origin", f"https://github.com/{TP}.git"))
@@ -58,12 +58,12 @@ class TestReviewerFindings(GateCase):
 
     def test_gh_host_makes_a_bare_repo_unresolvable(self):
         env = {"GH_HOST": "ghe.example.com"}
-        self.assertDenied(self.bash("gh pr comment 7 -R rubicon/mnemnon --body x", env=env))
-        self.assertAllowed(self.bash("gh pr comment 7 -R github.com/rubicon/mnemnon --body x", env=env))
+        self.assertDenied(self.bash("gh pr comment 7 -R myorg/tools --body x", env=env))
+        self.assertAllowed(self.bash("gh pr comment 7 -R github.com/myorg/tools --body x", env=env))
 
     # -- repo identity -----------------------------------------------------
     def test_url_inside_body_does_not_choose_the_repo(self):
-        body = "Fix is in https://github.com/rubicon/mempalace/pull/4"
+        body = "Fix is in https://github.com/myorg/app/pull/4"
         self.assertDenied(self.bash(f"gh pr comment 7 --body '{body}'", cwd=self.thirdparty()))
 
     def test_third_party_url_inside_body_does_not_block_owned_repo(self):
@@ -73,11 +73,11 @@ class TestReviewerFindings(GateCase):
     def test_url_selector_decides_the_repo(self):
         self.assertDenied(self.bash(f"gh pr comment https://github.com/{TP}/pull/7 --body x", cwd=self.owned()))
         self.assertAllowed(
-            self.bash("gh pr comment https://github.com/rubicon/mnemnon/pull/7 --body x", cwd=self.thirdparty())
+            self.bash("gh pr comment https://github.com/myorg/tools/pull/7 --body x", cwd=self.thirdparty())
         )
 
     def test_gh_default_repo_marker_picks_the_remote(self):
-        remotes = (("origin", "git@github.com:rubicon/mnemnon.git"), ("upstream", f"git@github.com:{TP}.git"))
+        remotes = (("origin", "git@github.com:myorg/tools.git"), ("upstream", f"git@github.com:{TP}.git"))
         owned_default = self.repo("d1", *remotes)
         subprocess.run(["git", "-C", str(owned_default), "config", "remote.origin.gh-resolved", "base"], check=True)
         self.assertAllowed(self.bash("gh pr comment 7 --body x", cwd=owned_default))
@@ -85,22 +85,22 @@ class TestReviewerFindings(GateCase):
         subprocess.run(["git", "-C", str(third_default), "config", "remote.upstream.gh-resolved", "base"], check=True)
         self.assertDenied(self.bash("gh pr comment 7 --body x", cwd=third_default))
         explicit = self.repo("d3", *remotes)
-        subprocess.run(["git", "-C", str(explicit), "config", "remote.upstream.gh-resolved", "rubicon/mnemnon"], check=True)
+        subprocess.run(["git", "-C", str(explicit), "config", "remote.upstream.gh-resolved", "myorg/tools"], check=True)
         self.assertAllowed(self.bash("gh pr comment 7 --body x", cwd=explicit))
 
     def test_owner_and_repo_must_be_plain_names(self):
-        for repo in ("rubicon/x/../../MemPalace/mempalace", "rubicon/x hi", "rubicon/..", "rubicon/x\ny"):
+        for repo in ("myorg/x/../../otherorg/widgets", "myorg/x hi", "myorg/..", "myorg/x\ny"):
             with self.subTest(repo):
                 self.assertDenied(self.bash(f"gh pr comment 7 -R '{repo}' --body x"))
 
     def test_mcp_owner_and_repo_must_be_plain_names(self):
-        tool_input = dict(owner="rubicon", repo="x/../../MemPalace/mempalace", issue_number=7, body="B")
+        tool_input = dict(owner="myorg", repo="x/../../otherorg/widgets", issue_number=7, body="B")
         self.assertDenied(self.mcp("mcp__github__add_issue_comment", tool_input))
 
     # -- flag parsing ------------------------------------------------------
     def test_flag_values_are_not_scanned_as_flags(self):
-        self.assertDenied(self.bash(f"gh pr comment 7 -R {TP} --body '-Rrubicon/x hi'"))
-        self.assertDenied(self.bash(f"gh pr create -R {TP} --title '-Rrubicon/x: fix' --body x -H h"))
+        self.assertDenied(self.bash(f"gh pr comment 7 -R {TP} --body '-Rmyorg/x hi'"))
+        self.assertDenied(self.bash(f"gh pr create -R {TP} --title '-Rmyorg/x: fix' --body x -H h"))
 
     def test_text_after_a_value_flag_that_looks_like_a_cluster_is_the_posted_text(self):
         self.record(title="T", body="R")
@@ -120,7 +120,7 @@ class TestReviewerFindings(GateCase):
         script = f'do shell script "gh pr comment 7 -R {TP} --body x"'
         reason = self.assertDenied(self.mcp("mcp__Control_your_Mac__osascript", {"script": script}))
         self.assertIn("cannot be verified", reason)
-        owned = 'do shell script "gh pr comment 7 -R rubicon/x --body x"'
+        owned = 'do shell script "gh pr comment 7 -R myorg/x --body x"'
         self.assertAllowed(self.mcp("mcp__Control_your_Mac__osascript", {"script": owned}))
         finder = 'tell application "Finder" to activate'
         self.assertAllowed(self.mcp("mcp__Control_your_Mac__osascript", {"script": finder}))
@@ -176,7 +176,7 @@ class TestReviewerFindings(GateCase):
         self.assertDenied(self.bash(f"gh issue edit 3 -R {TP} --title A"))
 
     def test_unrecognised_mcp_server_names_are_gated_when_they_carry_owner_and_repo(self):
-        tool_input = dict(owner="MemPalace", repo="mempalace", issue_number=7, body="B")
+        tool_input = dict(owner="OtherOrg", repo="widgets", issue_number=7, body="B")
         for server in ("gh", "a1b2c3d4-0000-4000-8000-000000000000"):
             with self.subTest(server):
                 self.assertDenied(self.mcp(f"mcp__{server}__add_issue_comment", tool_input))
@@ -185,11 +185,11 @@ class TestReviewerFindings(GateCase):
         self.assertAllowed(self.mcp("mcp__linear__create_issue", dict(title="T", body="B")))
 
     def test_mcp_merge_commit_text_is_gated_like_gh_pr_merge(self):
-        tool_input = dict(owner="MemPalace", repo="mempalace", pullNumber=7, commit_title="T", commit_message="M")
+        tool_input = dict(owner="OtherOrg", repo="widgets", pullNumber=7, commit_title="T", commit_message="M")
         self.assertDenied(self.mcp("mcp__github__merge_pull_request", tool_input))
-        self.record(title="T", body="M")
+        self.record(title="T", body="M", tool=("mcp__github__merge_pull_request", tool_input))
         self.assertAllowed(self.mcp("mcp__github__merge_pull_request", tool_input))
-        bare = dict(owner="MemPalace", repo="mempalace", pullNumber=7)
+        bare = dict(owner="OtherOrg", repo="widgets", pullNumber=7)
         self.assertAllowed(self.mcp("mcp__github__merge_pull_request", bare))
 
 
@@ -204,7 +204,7 @@ class TestSecondReview(GateCase):
 
     def setUp(self):
         super().setUp()
-        self.owned = self.repo("owned", ("origin", "git@github.com:rubicon/mnemnon.git"))
+        self.owned = self.repo("owned", ("origin", "git@github.com:myorg/tools.git"))
         self.third = self.repo("third", ("origin", f"https://github.com/{TP}.git"))
 
     def test_literal_cd_to_an_owned_checkout_is_owned(self):
@@ -260,9 +260,9 @@ class TestSecondReview(GateCase):
         self.assertAllowed(self.bash(f"gh api graphql -F query=@{safe}"))
 
     def test_literal_variable_in_the_repo_flag_is_resolved(self):
-        self.assertDenied(self.bash("R=MemPalace/mempalace; gh issue create -R \"$R\" --title T --body B"))
+        self.assertDenied(self.bash("R=otherorg/widgets; gh issue create -R \"$R\" --title T --body B"))
         self.assertDenied(self.bash("gh issue create -R \"$UNKNOWN\" --title T --body B"))
-        self.assertDenied(self.bash("gh issue create -R rubicon/$repo --title T --body B"))
+        self.assertDenied(self.bash("gh issue create -R myorg/$repo --title T --body B"))
 
     def test_unresolved_repo_denial_says_how_to_fix_it(self):
         reason = self.assertDenied(self.bash("gh pr comment 7 --body x"))
@@ -281,10 +281,11 @@ class TestSecondReview(GateCase):
         self.assertDenied(self.bash(f"gh api graphql -f query='{draft}'"))
 
     def test_repeated_plain_field_posts_the_last_value_only(self):
-        self.record(body="B")
-        self.assertAllowed(self.bash(f"gh api repos/{TP}/issues/7/comments -f body=A -f body=B"))
+        command = f"gh api repos/{TP}/issues/7/comments -f body=A -f body=B"
+        self.record(body="B", command=command)
+        self.assertAllowed(self.bash(command))
         shutil.rmtree(self.receipts)
-        self.record(body="A\n\nB")
+        self.record(body="A\n\nB", command=command)
         self.assertDenied(self.bash(f"gh api repos/{TP}/issues/7/comments -f body=A -f body=B"))
 
     def test_ansi_c_quoted_command_name_is_unverifiable(self):
@@ -459,7 +460,7 @@ class TestReceiptGuardHardening(ShellCase):
         self.assertDenied(self.hook(payload))
 
     def test_the_helper_rejects_abbreviated_flags(self):
-        r = self.run_gate(["record", "--repo", TP, "--body", "x", "--reviewer", "opus", "--verdict", "go",
+        r = self.run_gate(["record", "--repo", TP, *SCOPE, "--body", "x", "--reviewer", "opus", "--verdict", "go",
                            "--findings", "0"])
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertFalse(self.receipts.exists())
@@ -542,8 +543,8 @@ class TestPublishedDefaults(ShellCase):
 
     def test_nothing_is_exempt_when_no_owned_list_is_configured(self):
         unset = {"OUTBOUND_GATE_OWNED": ""}
-        self.assertDenied(self.bash("gh pr comment 7 -R rubicon/mnemnon --body x", env=unset))
-        self.assertDenied(self.bash("gh pr comment 7 -R git.example.test/rubicon/x --body x", env=unset))
+        self.assertDenied(self.bash("gh pr comment 7 -R myorg/tools --body x", env=unset))
+        self.assertDenied(self.bash("gh pr comment 7 -R git.example.test/myorg/x --body x", env=unset))
 
     def test_the_forgejo_host_comes_from_the_environment(self):
         tool_input = dict(owner="acme", repo="x", index=1, body="B")
@@ -561,10 +562,173 @@ class TestPublishedDefaults(ShellCase):
         self.assertIn(str(GATE), self.assertDenied(self.bash(f"gh pr comment 7 -R {TP} --body x")))
 
 
+def scope_of(reason):
+    """The scope=<json> segment of a denial: the repo, action and target a receipt must name."""
+    m = re.search(r"scope=(\{.*?\})", reason)
+    assert m, reason
+    return json.loads(m.group(1))
+
+
+class TestReceiptScope(ShellCase):
+    """A receipt vouches for one repo, one kind of post and one target, not for the text anywhere in the repo."""
+
+    NONE_OWNED = {"OUTBOUND_GATE_OWNED": "none/*"}
+
+    def scope(self, command=None, **mcp):
+        if command is not None:
+            reason = self.assertDenied(self.bash(command, env=self.NONE_OWNED))
+        else:
+            reason = self.assertDenied(self.mcp(mcp.pop("tool"), mcp.pop("tool_input"), env=self.NONE_OWNED))
+        return scope_of(reason)
+
+    def test_gh_commands_report_their_action_and_target(self):
+        cases = {
+            f"gh pr comment 7 -R {TP} --body x": ("pr comment", "7"),
+            f"gh issue comment 9 -R {TP} --body x": ("issue comment", "9"),
+            f"gh pr comment https://github.com/{TP}/pull/7 --body x": ("pr comment", "7"),
+            f"gh pr comment -R {TP} --body x": ("pr comment", ""),
+            f"gh pr create -R {TP} --title t --body x -H h": ("pr create", ""),
+            f"gh issue new -R {TP} --title t --body x": ("issue create", ""),
+            f"gh pr merge 5 -R {TP} --body x": ("pr merge", "5"),
+            f"gh pr close 7 -R {TP} --comment hi": ("pr close", "7"),
+            f"gh pr review 7 -R {TP} --comment --body x": ("pr review", "7"),
+            f"gh api -X POST repos/{TP}/issues/7/comments -f body=x": ("api POST", f"repos/{TP}/issues/7/comments".lower()),
+        }
+        for command, (action, target) in cases.items():
+            with self.subTest(command):
+                got = self.scope(command)
+                self.assertEqual((got["action"], got["target"]), (action, target))
+                self.assertEqual(got["repo"], TP.lower().join(["github.com/", ""]))
+
+    def test_mcp_tools_report_their_action_and_target(self):
+        o, r = "otherorg", "widgets"
+        cases = [
+            ("mcp__github__add_issue_comment", dict(owner=o, repo=r, issue_number=7, body="B"), ("add_issue_comment", "7")),
+            ("mcp__github__create_issue", dict(owner=o, repo=r, title="T", body="B"), ("create_issue", "")),
+            ("mcp__github__merge_pull_request", dict(owner=o, repo=r, pullNumber=5, commit_message="B"), ("merge_pull_request", "5")),
+            ("mcp__forgejo__create_issue_comment", dict(owner=o, repo=r, index=3, body="B"), ("create_issue_comment", "3")),
+            ("mcp__forgejo__edit_issue_comment", dict(owner=o, repo=r, id=11, body="B"), ("edit_issue_comment", "11")),
+        ]
+        for tool, tool_input, (action, target) in cases:
+            with self.subTest(tool):
+                got = self.scope(tool=tool, tool_input=tool_input)
+                self.assertEqual((got["action"], got["target"]), (action, target))
+
+    def test_a_receipt_unlocks_only_its_own_action_and_target(self):
+        self.record(body="hi", action="pr comment", target="7")
+        ok = f"gh pr comment 7 -R {TP} --body hi"
+        self.assertAllowed(self.bash(ok))
+        for other in (f"gh pr comment 8 -R {TP} --body hi", f"gh issue comment 7 -R {TP} --body hi",
+                      f"gh pr merge 7 -R {TP} --body hi", f"gh pr close 7 -R {TP} --comment hi",
+                      f"gh issue create -R {TP} --title t --body hi"):
+            with self.subTest(other):
+                self.assertDenied(self.bash(other))
+
+    def test_the_helper_prints_the_same_key_as_the_hook_computes(self):
+        for command in (f"gh pr comment 7 -R {TP} --body hi", f"gh pr create -R {TP} --title t --body hi -H h"):
+            with self.subTest(command):
+                got = self.scope(command)
+                r = self.run_gate(["hash", "--repo", got["repo"], "--action", got["action"], "--target", got["target"],
+                                   "--title", "t", "--body", "hi"] if "create" in command else
+                                  ["hash", "--repo", got["repo"], "--action", got["action"], "--target", got["target"],
+                                   "--body", "hi"])
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertRegex(r.stdout.strip(), r"^[0-9a-f]{64}$")
+
+    def test_record_and_hash_require_an_action(self):
+        flags = ["--repo", TP, "--body", "x"]
+        self.assertEqual(self.run_gate(["hash", *flags]).returncode, 2)
+        self.assertEqual(self.run_gate(["record", *flags, "--reviewer-model", "opus", "--verdict", "go",
+                                        "--findings", "0"]).returncode, 2)
+
+    def test_following_the_denial_unlocks_forgejo_and_enterprise_hosts(self):
+        forgejo = dict(owner="acme", repo="x", index=1, body="B")
+        got = self.scope(tool="mcp__forgejo__create_issue_comment", tool_input=forgejo)
+        self.record(body="B", repo=got["repo"], action=got["action"], target=got["target"], env=self.NONE_OWNED)
+        self.assertAllowed(self.mcp("mcp__forgejo__create_issue_comment", forgejo, env=self.NONE_OWNED))
+        env = {"GH_HOST": "ghe.example.test", "OUTBOUND_GATE_OWNED": "none/*"}
+        denial = self.assertDenied(self.bash(f"gh pr comment 7 -R acme/x --body B", env=env))
+        got = scope_of(denial)
+        self.assertEqual(got["repo"], "ghe.example.test/acme/x")
+        self.record(body="B", repo="acme/x", action=got["action"], target=got["target"], env=env)
+        self.assertAllowed(self.bash("gh pr comment 7 -R acme/x --body B", env=env))
+
+    def test_graphql_text_mutations_say_they_cannot_be_reviewed(self):
+        mutation = "mutation { addComment(input:{subjectId:\"I_1\", body:\"y\"}) { clientMutationId } }"
+        reason = self.assertDenied(self.bash(f"gh api graphql -f query='{mutation}'", env={"OUTBOUND_GATE_OWNED": "github.com/myorg/*"}))
+        self.assertIn("GraphQL", reason)
+        self.assertNotIn("--body-file", reason)
+        self.assertIn("gh pr comment", reason)
+
+
+class TestFalsePositivesAndTiming(ShellCase):
+    def test_text_that_merely_mentions_the_receipt_directory_is_not_a_write(self):
+        home = {"OUTBOUND_REVIEW_DIR": "", "OUTBOUND_GATE_OWNED": "github.com/myorg/*"}
+        for command in (
+            'gh issue create -R myorg/x --title t --body "receipts live in ~/.claude/state/outbound-review"',
+            'git commit -m "document ~/.claude/state/outbound-review"',
+            "mkdir -p ~/.claude/state/outbound-review-notes",
+            "echo ~/.claude/state/outbound-review",
+        ):
+            with self.subTest(command):
+                self.assertAllowed(self.shell(command, env=home))
+
+    def test_the_receipt_directory_is_still_protected_where_it_is_written(self):
+        home = {"OUTBOUND_REVIEW_DIR": ""}
+        for command in ("mkdir -p ~/.claude/state/outbound-review/sub", "touch ~/.claude/state/outbound-review/k.json",
+                        "python3 -c \"open('/x/.claude/state/outbound-review/k.json','w')\"".replace("/x", "$HOME")):
+            with self.subTest(command):
+                self.assertDenied(self.shell(command, env=home))
+
+    def test_function_definition_scan_stays_linear(self):
+        start = time.perf_counter()
+        r = self.bash(f"gh pr comment 7 -R {TP} --body x\n" + "f(){ " * 24000)
+        self.assertLess(time.perf_counter() - start, 5.0)
+        self.assertEqual(r.returncode, 0)
+
+    def test_a_file_named_dash_is_not_stdin(self):
+        (self.work / "-").write_text("body from a file named dash")
+        self.assertDenied(self.bash(f"gh pr comment 7 -R {TP} --body-file -"))
+
+
+class TestHooksJson(unittest.TestCase):
+    HOOKS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hooks", "hooks.json")
+
+    def entry(self):
+        with open(self.HOOKS) as fh:
+            groups = json.load(fh)["hooks"]["PreToolUse"]
+        self.assertEqual(len(groups), 1)
+        return groups[0]
+
+    def test_the_matcher_covers_every_tool_the_gate_inspects(self):
+        loader = importlib.machinery.SourceFileLoader("gate_for_hooks", str(GATE))
+        spec = importlib.util.spec_from_loader("gate_for_hooks", loader)
+        gate = importlib.util.module_from_spec(spec)
+        loader.exec_module(gate)
+        matcher = re.compile(self.entry()["matcher"])
+        names = ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit", "Monitor", "mcp__terminal__run_in_terminal",
+                 "mcp__Control_your_Mac__osascript"]
+        names += [f"mcp__{server}__{tool}" for server in ("github", "forgejo") for tool in gate.MCP_FIELDS]
+        for name in names:
+            with self.subTest(name):
+                self.assertTrue(matcher.search(name), name)
+        for name in ("Read", "Grep", "Glob", "WebFetch", "mcp__github__list_issues", "mcp__github__issue_read"):
+            with self.subTest(name):
+                self.assertFalse(matcher.search(name), name)
+
+    def test_a_failing_hook_blocks_the_call(self):
+        hook = self.entry()["hooks"][0]
+        self.assertEqual(hook.get("onFailure"), "block")
+        self.assertEqual(hook["type"], "command")
+        self.assertIn("${CLAUDE_PLUGIN_ROOT}/scripts/outbound-comment-review-gate", hook["command"])
+        self.assertTrue(os.access(str(GATE), os.X_OK))
+
+
 class TestHelperRobustness(GateCase):
     """Fourth review: the helper must fail with a parser error, never a traceback or a hang."""
 
-    FLAGS = ["--repo", TP, "--reviewer-model", "opus", "--verdict", "go", "--findings", "1"]
+    TAIL = ["--reviewer-model", "opus", "--verdict", "go", "--findings", "1"]
+    FLAGS = ["--repo", TP, *SCOPE, *TAIL]
 
     def run_cli(self, args, **kw):
         return subprocess.run([str(GATE), *args], capture_output=True, text=True, env={**self.env, **kw.get("env", {})},
@@ -582,8 +746,8 @@ class TestHelperRobustness(GateCase):
         for path in (big, fifo, "/dev/zero"):
             for cmd in ("hash", "record"):
                 with self.subTest(f"{cmd} {path}"):
-                    extra = self.FLAGS[2:] if cmd == "record" else []
-                    self.assertCleanFailure(self.run_cli([cmd, "--repo", TP, "--body-file", str(path), *extra]))
+                    extra = self.TAIL if cmd == "record" else []
+                    self.assertCleanFailure(self.run_cli([cmd, "--repo", TP, *SCOPE, "--body-file", str(path), *extra]))
 
     def test_unwritable_receipt_directories_give_a_parser_error(self):
         self.receipts.write_text("not a directory")
@@ -595,12 +759,12 @@ class TestHelperRobustness(GateCase):
         self.assertCleanFailure(self.run_cli(["record", "--body", "x", *self.FLAGS]))
 
     def test_text_that_cannot_be_encoded_gives_a_parser_error(self):
-        self.assertCleanFailure(self.run_cli(["hash", "--repo", TP, "--body", "\udcff"]))
+        self.assertCleanFailure(self.run_cli(["hash", "--repo", TP, *SCOPE, "--body", "\udcff"]))
 
     def test_record_refuses_values_no_receipt_could_ever_use(self):
-        for flags in (["--repo", TP, "--reviewer-model", "", "--verdict", "go", "--findings", "1"],
-                      ["--repo", TP, "--reviewer-model", "  ", "--verdict", "go", "--findings", "1"],
-                      ["--repo", TP, "--reviewer-model", "opus", "--verdict", "go", "--findings", "-5"]):
+        for flags in (["--repo", TP, *SCOPE, "--reviewer-model", "", "--verdict", "go", "--findings", "1"],
+                      ["--repo", TP, *SCOPE, "--reviewer-model", "  ", "--verdict", "go", "--findings", "1"],
+                      ["--repo", TP, *SCOPE, "--reviewer-model", "opus", "--verdict", "go", "--findings", "-5"]):
             with self.subTest(flags):
                 self.assertCleanFailure(self.run_cli(["record", "--body", "x", *flags]))
                 self.assertFalse(self.receipts.exists() and any(self.receipts.iterdir()))
@@ -609,15 +773,16 @@ class TestHelperRobustness(GateCase):
         key = sha(None, "x")
         self.receipts.mkdir()
         (self.receipts / f"{key}.json").write_bytes(b"\xff\xfe not json")
-        r = self.run_cli(["disposition", "--repo", TP, "--body", "x"])
+        r = self.run_cli(["disposition", "--repo", TP, *SCOPE, "--body", "x"])
         self.assertCleanFailure(r)
         self.assertIn("malformed", r.stderr)
 
     def test_repo_may_be_given_as_an_ssh_remote(self):
-        want = self.run_cli(["hash", "--repo", TP, "--body", "x"]).stdout
+        want = self.run_cli(["hash", "--repo", TP, *SCOPE, "--body", "x"]).stdout
+        self.assertRegex(want, r"^[0-9a-f]{64}$")
         for spec in (f"git@github.com:{TP}.git", f"ssh://git@github.com/{TP}.git"):
             with self.subTest(spec):
-                self.assertEqual(self.run_cli(["hash", "--repo", spec, "--body", "x"]).stdout, want)
+                self.assertEqual(self.run_cli(["hash", "--repo", spec, *SCOPE, "--body", "x"]).stdout, want)
 
 
 @unittest.skipUnless(os.environ.get("OUTBOUND_GATE_CHECK_GH_FLAGS"),

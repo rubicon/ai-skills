@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Claude Code PreToolUse gate for outbound text on third-party repos.
 
-Standing rule: before anything is posted, edited or opened on a repo outside
-the user's own, a fresh adversarial reviewer checks the exact text and every
-finding is dispositioned. This hook denies the post unless a review receipt for
-that exact text and repo exists.
+Rule: before anything is posted, edited or opened on a repo outside the user's
+own, a fresh reviewer checks the exact text and every finding is dispositioned.
+This hook denies the post unless a review receipt for that exact text, repo,
+kind of post and target exists.
 
 Two modes, one file, stdlib only:
 
@@ -14,12 +14,13 @@ Two modes, one file, stdlib only:
   record           Run by the reviewing SUBAGENT as the last step of its
                    review: writes a receipt for one repo and the exact text.
                    The hook refuses this command from the main thread.
-  disposition      Run by the hub after every finding is applied or rejected
-                   with a reason: marks the receipt dispositioned.
+  disposition      Run by the posting session after every finding is applied or
+                   rejected with a reason: marks the receipt dispositioned.
   hash             Prints the receipt key without writing anything.
 
-Receipt key: sha256 of the JSON list [repo, title, body], the repo as
-host/owner/repo in lowercase and title and body right-stripped. The receipt
+Receipt key: sha256 of the JSON list [repo, action, target, title, body], the
+repo as host/owner/repo in lowercase, the action and target as the denial
+message reports them, and title and body right-stripped. The receipt
 lives in OUTBOUND_REVIEW_DIR, default ~/.claude/state/outbound-review, as
 <sha256>.json. A receipt counts only when its verdict is go, it is marked
 dispositioned, it names a reviewer model and its inner hash matches its name.
@@ -66,7 +67,7 @@ MAX_COMMAND = 256 * 1024
 MAX_TEXT = 1024 * 1024
 MAX_DEPTH = 4
 
-Post = namedtuple("Post", "repos title body problem guard", defaults=(None,))
+Post = namedtuple("Post", "repos title body problem guard action target", defaults=(None, "", ""))
 
 
 class Unverifiable(Exception):
@@ -97,9 +98,9 @@ def canonical(title, body):
     return json.dumps(parts, ensure_ascii=False) if any(parts) else ""
 
 
-def digest(repo, title, body):
-    """Receipt key: the repo plus the text, so a review only vouches for the repo it was run against."""
-    text = json.dumps([repo, (title or "").rstrip(), (body or "").rstrip()], ensure_ascii=False)
+def digest(repo, action, target, title, body):
+    """Receipt key: repo, kind of post, target and text, so a review vouches only for the post it was run for."""
+    text = json.dumps([repo, action, target, (title or "").rstrip(), (body or "").rstrip()], ensure_ascii=False)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
@@ -128,7 +129,7 @@ def receipt_problem(key):
     if data.get("verdict") != "go":
         return "the reviewer's verdict is not go"
     if data.get("dispositioned") is not True:
-        return "the findings are not marked dispositioned (the hub runs the disposition command)"
+        return "the findings are not marked dispositioned (the posting session runs the disposition command)"
     model = data.get("reviewer_model")
     if not isinstance(model, str) or not model.strip():
         return "the receipt names no reviewer model"
@@ -415,6 +416,14 @@ def resolve_repos(values, positional, ctx, env):
     return cwd_repos(ctx)
 
 
+def selector_target(positional):
+    """The PR or issue a gh command names: its number (also from a URL), a branch name, or "" for the current one."""
+    if not positional:
+        return ""
+    url = re.search(r"/(?:pull|issues)/(\d+)", positional[0]) if SELECTOR_URL_RE.match(positional[0]) else None
+    return url.group(1) if url else positional[0]
+
+
 def gh_command(args, ctx, env):
     if not args:
         return []
@@ -469,7 +478,7 @@ def gh_command(args, ctx, env):
             raise Unverifiable("the comment has no --body or --body-file")
         if not canonical(title, body):
             return []
-        return [Post(repos, title, body, None)]
+        return [Post(repos, title, body, None, None, key, selector_target(positional))]
     except Unverifiable as exc:
         return [Post(repos, None, None, str(exc))]
 
@@ -537,7 +546,7 @@ def graphql_check(values, ctx):
                 roots = {m.lower() for m in re.findall(r"\b(\w+)\s*\(\s*input\s*:", query)}
                 allowed = SAFE_MUTATIONS | ({"updateprojectv2itemfieldvalue"} if PROJECT_CHOICE_RE.search(query) else set())
                 if not roots or not roots <= allowed:
-                    raise Unverifiable("this GraphQL mutation may carry text and is not on the no-text list")
+                    raise Unverifiable("this GraphQL mutation may carry text, which cannot be reviewed; post it with gh pr comment, gh issue comment or a REST endpoint instead")
 
 
 def gh_api(args, ctx, env):
@@ -581,7 +590,7 @@ def gh_api(args, ctx, env):
         return [Post(repos, None, None, str(exc))]
     if not canonical(title, body):
         return []
-    return [Post(repos, title, body, None)]
+    return [Post(repos, title, body, None, None, f"api {method}", path.lower())]
 
 
 # --------------------------------------------------------------------------
@@ -600,7 +609,9 @@ CONTROL_RE = re.compile(r"[\x01-\x04]")
 GATED_TAIL_RE = re.compile(
     r"(?:\s+-{1,2}[\w-]+(?:[ =]\S+)?){0,6}\s+(?:((?:pr|issue|discussion)\s+(?:comment|review|create|new|edit|close|reopen|merge|revert)\b)|api\b)"
 )
-FUNCTION_RE = re.compile(r"\bfunction\s+([A-Za-z_]\w*)[^{;]*\{[^}]*\bgh\b|\b([A-Za-z_]\w*)\s*\(\s*\)\s*\{[^}]*\bgh\b")
+# A function definition's opening; its body is checked for `gh` in a bounded window so the scan stays linear.
+FUNCTION_RE = re.compile(r"\bfunction\s+([A-Za-z_]\w*)[^{;]{0,200}\{|\b([A-Za-z_]\w*)\s*\(\s*\)\s*\{")
+FUNCTION_WINDOW = 8192
 INLINE_ENV_RE = re.compile(r"^(GH_REPO|GH_HOST)=(.*)$", re.S)
 
 
@@ -841,6 +852,9 @@ READ_ONLY = {"ls", "cat", "head", "tail", "wc", "stat", "jq", "grep", "shasum", 
 # Read-only unless one of their flags writes a file or runs a program.
 FIND_WRITERS = {"-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"}
 RG_RUNNERS = ("--pre", "--hostname-bin")
+# Commands whose arguments are text or search patterns: a receipt path inside one is only a write when the whole word
+# resolves to a path in the receipt directory, not when a sentence merely mentions it.
+TEXT_ARGS = {"gh", "git", "echo", "printf", "grep", "egrep", "fgrep", "rg", "ag", "ack"}
 # Commands that only read or display their arguments, so naming the helper or a flag after them is not running it.
 NON_EXEC = {"git", "grep", "egrep", "fgrep", "rg", "ag", "ack", "cat", "bat", "less", "more", "head", "tail", "wc", "stat",
             "file", "ls", "vim", "vi", "nvim", "nano", "emacs", "code", "open", "cp", "mv", "rm", "ln", "diff", "man",
@@ -877,7 +891,7 @@ def read_only(base, rest):
 RECORD_REASON = (
     "Outbound review gate: a receipt is recorded by the reviewing subagent, not by the session that posts. Have the "
     "fresh adversarial reviewer run the helper's record command on the exact text as the last step of its review; "
-    "the hub then runs the disposition command once every finding is applied or rejected with a reason."
+    "the posting session then runs the disposition command once every finding is applied or rejected with a reason."
 )
 WRITE_REASON = (
     "Outbound review gate: receipt files are written only by the helper's record and disposition commands, never "
@@ -912,7 +926,7 @@ def receipt_forms():
     return _receipt_forms(receipt_dir())
 
 
-def touches_receipts(text, ctx=None, cwd=None):
+def touches_receipts(text, ctx=None, cwd=None, embedded=True):
     """True when `text` (a shell word or a file path) names something inside the receipt directory, after
     expanding $HOME, ~ and known variables, resolving . and .. against the cwd, and ignoring case (APFS)."""
     home = os.path.expanduser("~")
@@ -923,8 +937,10 @@ def touches_receipts(text, ctx=None, cwd=None):
     if text == "~" or text.startswith("~/"):
         text = home + text[1:]
     forms = receipt_forms()
-    if any(f in text.casefold() for f in forms):
-        return True
+    if embedded:
+        folded = text.casefold()
+        if any(re.search(re.escape(f) + r"(?![\w.-])", folded) for f in forms):
+            return True
     dirs = receipt_dirs()
     base = cwd or os.getcwd()
     for cand in {text, text.split("=", 1)[-1]}:
@@ -1013,7 +1029,7 @@ def simple_command(toks, ctx, depth):
     if (not ctx.agent and not {"--help", "-h"} & set(toks) and reads_a_script(base, rest)
             and runs_record(ctx.text)):
         return [guard_post(RECORD_REASON)]
-    if not helper_call and not read_only(base, rest) and any(touches_receipts(t, ctx) for t in set(toks)):
+    if not helper_call and not read_only(base, rest) and any(touches_receipts(t, ctx, embedded=base not in TEXT_ARGS) for t in set(toks)):
         return [guard_post(WRITE_REASON)]
     if base in ("cd", "chdir", "pushd", "popd"):
         change_dir(base, rest, ctx)
@@ -1087,7 +1103,7 @@ def run_text(text, ctx, depth):
     items = split_commands(text)
     for k, item in enumerate(items):
         if isinstance(item, tuple):
-            if touches_receipts(item[1], ctx):
+            if touches_receipts(item[1], ctx, embedded=False):
                 posts.append(guard_post(WRITE_REASON))
         elif item == "(":
             scopes.append((ctx.cwd, ctx.moved))
@@ -1108,7 +1124,9 @@ def scan(command, ctx, depth=0):
     top = preprocess(command, subs)
     everything = top + "\n" + "\n".join(subs)
     for m in FUNCTION_RE.finditer(everything):
-        ctx.aliases.add(m.group(1) or m.group(2))
+        body = everything[m.end():m.end() + FUNCTION_WINDOW].split("}", 1)[0]
+        if "gh" in body and GH_TEXT_RE.search(body):
+            ctx.aliases.add(m.group(1) or m.group(2))
     posts = run_text(top, ctx, depth)
     for inner in subs:
         saved = (ctx.cwd, ctx.moved)
@@ -1188,6 +1206,9 @@ MCP_FIELDS = {
 }
 
 
+MCP_TARGETS = ("issue_number", "pullNumber", "pull_number", "index", "comment_id", "id", "number")
+
+
 def mcp_posts(name, tool_input):
     parts = name.split("__")
     server, tool = "__".join(parts[1:-1]).lower(), parts[-1]
@@ -1212,7 +1233,11 @@ def mcp_posts(name, tool_input):
         return []
     host = (os.environ.get("OUTBOUND_GATE_FORGEJO_HOST") or DEFAULT_FORGEJO_HOST) if forgejo else "github.com"
     found = make_repo(host, owner, repo) if has_repo else None
-    return [Post([found] if found else [], title, body, None)]
+    method = tool_input.get("method")
+    action = f"{tool} {method}" if isinstance(method, str) and method.isidentifier() else tool
+    target = next((str(tool_input[k]) for k in MCP_TARGETS if isinstance(tool_input.get(k), (int, str))
+                   and not isinstance(tool_input.get(k), bool) and str(tool_input[k]) != ""), "")
+    return [Post([found] if found else [], title, body, None, None, action, target)]
 
 
 # --------------------------------------------------------------------------
@@ -1227,18 +1252,20 @@ def deny_reason(post, key=None):
         return post.guard
     where = ", ".join(post.repos) or "a repository that could not be resolved"
     if post.problem:
-        return (
-            f"Outbound review gate: this post to {where} cannot be verified ({post.problem}), so no review receipt "
-            "can cover it. Write the exact text to a file on its own first, have a fresh adversarial reviewer check "
-            "that file, record a receipt, then post with --body-file pointing at the same file (MCP tools: send the "
-            "same text as a literal string)."
+        advice = "" if post.problem.startswith("this GraphQL") else (
+            " Write the exact text to a file on its own first, have a fresh reviewer check that file, record a "
+            "receipt, then post with --body-file pointing at the same file (MCP tools: send the same text as a "
+            "literal string). Name the repo with -R."
         )
+        return (f"Outbound review gate: this post to {where} cannot be verified ({post.problem}), so no review "
+                f"receipt can cover it.{advice}")
+    scope = json.dumps({"repo": post.repos[0], "action": post.action, "target": post.target}, ensure_ascii=False)
     return (
         f"Outbound review gate: no valid review receipt for this post to {where} (sha256 {key}: "
-        f"{receipt_problem(key)}). Standing rule: a fresh adversarial reviewer subagent must check the exact text "
-        "against the Outbound PR Authorship Standard and verify every claim; it records the receipt, and every "
-        f"finding must then be dispositioned by the hub. Usage: {helper_path()} record --help. Editing the text or "
-        "naming a different repo changes the key and needs a new receipt."
+        f"{receipt_problem(key)}). Rule: a fresh reviewer subagent must check the exact text for accuracy and "
+        "tone; it records the receipt, and the posting session then dispositions every finding. The receipt must "
+        f"name this scope={scope}. Usage: {helper_path()} record --help (pass --repo, --action and --target "
+        "exactly as shown). Editing the text or changing the repo, kind of post or target needs a new receipt."
     )
 
 
@@ -1248,7 +1275,7 @@ def collect(name, tool_input, payload):
     posts = []
     if name in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
         path = tool_input.get("file_path") or tool_input.get("notebook_path")
-        if isinstance(path, str) and touches_receipts(path, cwd=ctx.cwd):
+        if isinstance(path, str) and touches_receipts(path, cwd=ctx.cwd, embedded=False):
             posts.append(guard_post(WRITE_REASON))
     command, script = tool_input.get("command"), tool_input.get("script")
     if isinstance(command, str):
@@ -1285,7 +1312,7 @@ def decide(payload):
                 problem = "the target repo could not be resolved to exactly one repo; pass -R owner/repo"
             if problem:
                 return deny_reason(Post(post.repos, None, None, problem))
-            key = digest(post.repos[0], post.title, post.body)
+            key = digest(post.repos[0], post.action, post.target, post.title, post.body)
             if receipt_problem(key):
                 return deny_reason(post, key)
         except Exception:
@@ -1339,11 +1366,14 @@ def cli(argv):
     sub = parser.add_subparsers(dest="cmd", required=True)
     for name, help_text in (
         ("record", "reviewing subagent: write a receipt for the exact text, for one repo"),
-        ("disposition", "hub: mark a receipt's findings applied or rejected with a reason"),
+        ("disposition", "posting session: mark a receipt's findings applied or rejected with a reason"),
         ("hash", "print the receipt key for a repo and text"),
     ):
         p = sub.add_parser(name, help=help_text, allow_abbrev=False)
-        p.add_argument("--repo", required=name != "disposition", help="OWNER/REPO, HOST/OWNER/REPO or a URL")
+        p.add_argument("--repo", required=name != "disposition", help="HOST/OWNER/REPO exactly as the denial shows it")
+        p.add_argument("--action", required=name == "record" or name == "hash",
+                       help='kind of post as the denial shows it, e.g. "pr comment"')
+        p.add_argument("--target", default="", help="PR or issue number (or id, or path) as the denial shows it")
         p.add_argument("--title")
         p.add_argument("--body")
         p.add_argument("--body-file")
@@ -1361,9 +1391,9 @@ def cli(argv):
         if not re.fullmatch(r"[0-9a-f]{64}", key):
             parser.error("--sha256 must be 64 lowercase hex characters")
     else:
-        if not args.repo:
-            parser.error("give --repo and the text, or --sha256")
-        repo = norm_repo(args.repo)
+        if not args.repo or args.action is None:
+            parser.error("give --repo, --action and the text, or --sha256")
+        repo = norm_repo(args.repo, os.environ.get("GH_HOST") or "github.com")
         if not repo:
             parser.error("--repo must be OWNER/REPO, HOST/OWNER/REPO or a repo URL made of plain names")
         body = args.body
@@ -1382,7 +1412,7 @@ def cli(argv):
         if not canonical(args.title, body):
             parser.error("no text: give --title and/or --body/--body-file")
         try:
-            key = digest(repo, args.title, body)
+            key = digest(repo, args.action, args.target, args.title, body)
         except UnicodeError:
             parser.error("the text is not valid unicode")
     if args.cmd == "hash":
@@ -1398,6 +1428,8 @@ def cli(argv):
         write(parser, path, {
             "sha256": key,
             "repo": repo,
+            "action": args.action,
+            "target": args.target,
             "reviewer_model": args.reviewer_model,
             "reviewed_at": now(),
             "verdict": args.verdict,
@@ -1405,7 +1437,7 @@ def cli(argv):
             "dispositioned": False,
             **({"note": args.note} if args.note else {}),
         })
-        print("note: the hub must run disposition before this receipt unlocks the post", file=sys.stderr)
+        print("note: the posting session must run disposition before this receipt unlocks the post", file=sys.stderr)
         print(key)
         return 0
 
