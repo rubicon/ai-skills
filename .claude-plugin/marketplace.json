@@ -71,6 +71,11 @@
       "name": "loadout",
       "source": "./plugins/loadout",
       "description": "Audit which plugins and skills a project loads, recommend a per-project set, apply it after approval, and verify it from fresh sessions."
+    },
+    {
+      "name": "right-stuff-guard",
+      "source": "./plugins/right-stuff-guard",
+      "description": "Deny an AskUserQuestion call whose option labels break the right-stuff marker rules, so the model fixes them and asks again."
     }
   ]
 }

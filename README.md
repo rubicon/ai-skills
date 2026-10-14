@@ -28,7 +28,7 @@ skillshare install github.com/rubicon/ai-skills -s relocate-session
 skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memoir
 
 # Every skill published here
-skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memoir,codex-review,goalpost,grand-tour,identity-theft,relocate-session,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
+skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memoir,codex-review,goalpost,grand-tour,identity-theft,relocate-session,right-stuff,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
 ```
 
 ## Skills
@@ -48,6 +48,7 @@ skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,
 | [showdown](skills/showdown/SKILL.md) | Put two or three genuinely different approaches head to head on the same terms, pick one argued from the goal, and name what would flip it — a decision, not a plan |
 | [anger-translator](skills/anger-translator/SKILL.md) | Turn a heated draft into a firm, professional message you can send at work — keeps the facts, the ask, and the consequences you stated; removes the heat; flags the political risk |
 | [codex-review](skills/codex-review/SKILL.md) | Get an independent code review from the Codex CLI: review a branch, uncommitted work, or one commit with invocations that work, and report the findings as advisory |
+| [right-stuff](skills/right-stuff/SKILL.md) | Ask the user through a pop-up question with two judgments on the option labels: `(Recommended)` for what the agent would pick, `(Right Thing)` for what a careful expert would pick even when it costs more |
 
 ## Plugins
 
@@ -66,6 +67,7 @@ Install from this repository's marketplace (`rubicon`):
 | [pitstop](plugins/pitstop/README.md) | Save what a compact or clear would destroy, then rebuild status after it, with a verified handoff |
 | [loadout](plugins/loadout/README.md) | Audit which plugins and skills a project loads, recommend a per-project set, apply it after approval, and verify it from fresh sessions |
 | [outbound-review-gate](plugins/outbound-review-gate/README.md) | Deny posts to third-party repos unless a review receipt exists for the exact text |
+| [right-stuff-guard](plugins/right-stuff-guard/README.md) | A PreToolUse hook that denies an AskUserQuestion call whose option labels break the right-stuff marker rules, so the model fixes them and asks again |
 | [rubicon-marketing-board](https://github.com/rubicon/rubicon-marketing-board) | A nine-seat marketing advisory board for Claude Code (external source) |
 
 

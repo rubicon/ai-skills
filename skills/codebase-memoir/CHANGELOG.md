@@ -4,6 +4,13 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
+## [1.0.1](https://github.com/rubicon/ai-skills/compare/codebase-memoir-v1.0.0...codebase-memoir-v1.0.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **codebase-memoir:** correct nine accuracy gaps ([#153](https://github.com/rubicon/ai-skills/issues/153)) ([975a9b1](https://github.com/rubicon/ai-skills/commit/975a9b1b0d88a61a874bb6a96f75f172c9073982))
+
 ## [1.0.0] — 2026-10-12
 
 ### Added
