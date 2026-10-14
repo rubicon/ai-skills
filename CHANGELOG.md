@@ -5,6 +5,26 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.0.0](https://github.com/rubicon/ai-skills/compare/v1.4.2...v2.0.0) (2026-10-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* the codebase-memory skill is removed. Install codebase-memoir with skillshare -s codebase-memoir instead of -s codebase-memory.
+
+### Features
+
+* add codex-review, an independent review with the Codex CLI ([#140](https://github.com/rubicon/ai-skills/issues/140)) ([154794a](https://github.com/rubicon/ai-skills/commit/154794a2583a7afcf2769cf4384326b9f6758240))
+* add right-stuff, pop-up questions that mark a recommendation and the right thing ([#144](https://github.com/rubicon/ai-skills/issues/144)) ([bd9e03b](https://github.com/rubicon/ai-skills/commit/bd9e03b776e05ab5a80f580326158dd5553c293c))
+* replace codebase-memory with codebase-memoir, the maintained version ([#127](https://github.com/rubicon/ai-skills/issues/127)) ([b0ce643](https://github.com/rubicon/ai-skills/commit/b0ce6439db36d8cd8323bd3d26f8fed992b6bd9f))
+
+
+### Bug Fixes
+
+* **codebase-memoir:** correct nine accuracy gaps ([#153](https://github.com/rubicon/ai-skills/issues/153)) ([975a9b1](https://github.com/rubicon/ai-skills/commit/975a9b1b0d88a61a874bb6a96f75f172c9073982))
+* **pitstop:** count ref moves onto older commits as drift ([#142](https://github.com/rubicon/ai-skills/issues/142)) ([f3056f5](https://github.com/rubicon/ai-skills/commit/f3056f5e4d337f4b144ca50b8eddac7798b2b50c))
+* **pitstop:** describe every drift form and what none means ([#143](https://github.com/rubicon/ai-skills/issues/143)) ([659d19f](https://github.com/rubicon/ai-skills/commit/659d19f98035f2f650a5b3b07094d1e0dd8b37d9))
+
 ## [1.4.2](https://github.com/rubicon/ai-skills/compare/v1.4.1...v1.4.2) (2026-10-12)
 
 
