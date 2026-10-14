@@ -4,6 +4,13 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
+## [0.2.0](https://github.com/rubicon/ai-skills/compare/right-stuff-v0.1.0...right-stuff-v0.2.0) (2026-10-14)
+
+
+### Features
+
+* add right-stuff, pop-up questions that mark a recommendation and the right thing ([#144](https://github.com/rubicon/ai-skills/issues/144)) ([bd9e03b](https://github.com/rubicon/ai-skills/commit/bd9e03b776e05ab5a80f580326158dd5553c293c))
+
 ## [0.1.0] — 2026-10-12
 
 ### Added

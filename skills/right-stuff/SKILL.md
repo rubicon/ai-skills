@@ -1,6 +1,6 @@
 ---
 name: right-stuff
-version: 0.1.0  # x-release-please-version
+version: 0.2.0  # x-release-please-version
 description: Use when about to call AskUserQuestion, when the user says to ask them in a pop-up or wants a recommendation or "the right thing to do", or when blocked on something only the user can give - an approval, a missing fact, a choice between approaches - including before any destructive, irreversible, or outward-facing step that needs a yes.
 ---
 
