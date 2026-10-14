@@ -5,6 +5,13 @@ All notable changes to this plugin are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [0.2.0](https://github.com/rubicon/ai-skills/compare/right-stuff-guard-v0.1.0...right-stuff-guard-v0.2.0) (2026-10-14)
+
+
+### Features
+
+* add right-stuff-guard, a hook that denies malformed AskUserQuestion markers ([#157](https://github.com/rubicon/ai-skills/issues/157)) ([8c80f7b](https://github.com/rubicon/ai-skills/commit/8c80f7bb3a2c20844addb23bc6240684b363f6ae))
+
 ## [0.1.0] - 2026-10-13
 
 ### Added
