@@ -672,6 +672,13 @@ def api_reply_to(values, ctx):
             key, _, val = kv.partition("=")
             if key == "in_reply_to":
                 return val.strip()
+    for path in values.get("--input", []):
+        try:
+            data = json.loads(read_text(path, ctx))
+        except (ValueError, RecursionError, Unverifiable):
+            continue
+        if isinstance(data, dict) and data.get("in_reply_to") not in (None, ""):
+            return str(data["in_reply_to"])
     return ""
 
 
@@ -1154,8 +1161,9 @@ def change_dir(base, args, ctx):
 def main_thread_helper_use(toks, expanded, base, word, rest, ctx, ci=0):
     """True when the main thread (no agent_id) runs the helper for anything but disposition, hash or help.
 
-    An allowlist: the first argument after the helper must be one of those words, literally. An argument that
-    holds a variable, a substitution or $'...' quoting counts as `record`. Copying the helper, running a shell
+    An allowlist for the command word: the first argument after the helper must be one of those words, literally.
+    Anywhere else (behind a wrapper, an option or another program) only a literal `record`, or an argument that
+    holds a variable, a substitution or $'...' quoting, is denied. Such an argument counts as `record`. Copying the helper, running a shell
     or interpreter fed the helper's name on stdin, and a command word that no variable resolves while the
     helper's own flags are present all count as running it."""
     if any(t == "--reviewer-model" or t.startswith("--reviewer-model=") for t in toks) and base not in NON_EXEC:
@@ -1169,12 +1177,17 @@ def main_thread_helper_use(toks, expanded, base, word, rest, ctx, ci=0):
         return True
     if base not in NON_EXEC:
         for j in at:
-            runs = (j == ci or base in EXEC_WRAPPERS
-                    or (INTERPRETERS.match(base) and not {"-m", "-c"} & set(toks[ci + 1:j])))
-            if runs and j + 1 < len(toks):
-                arg = expanded[j + 1]
+            if j + 1 >= len(toks):
+                continue
+            arg = expanded[j + 1]
+            if j == ci:
+                # The helper is the command: only disposition, hash and help are allowed, literally.
                 if not is_literal(arg) or arg not in HELPER_ARGS:
                     return True
+            elif not is_literal(arg) or arg == "record":
+                # Named behind some wrapper or option: ordinary commands (find -name, git add, sed) that merely
+                # mention the helper pass; a literal `record` or an argument built by the shell is denied.
+                return True
         if not is_literal(expand_vars(word, ctx)) and ("--verdict" in toks or "--findings" in toks):
             return True
     return reads_a_script(base, rest) and runs_record(ctx.text)
@@ -1188,7 +1201,7 @@ def rescan_arguments(toks, i, base, ctx, depth):
         return posts
     if base == "git":
         for j in range(i + 1, len(toks)):
-            if "=!" not in toks[j] or " " in toks[j]:
+            if "=!" not in toks[j]:
                 continue
             name, cmd = toks[j].split("=!", 1)
             name = name.split("alias.", 1)[-1]
@@ -1349,7 +1362,7 @@ def simple_command(toks, ctx, depth):
     if base in ("curl", "wget"):
         return curl_posts(base, rest, ctx)
     posts = []
-    if base in EXEC_WRAPPERS:
+    if base in EXEC_WRAPPERS or any(os.path.basename(t) in EXEC_WRAPPERS for t in toks[:i]):
         for j in range(i + 1, len(toks)):
             if os.path.basename(toks[j]) in ("curl", "wget"):
                 posts += curl_posts(os.path.basename(toks[j]), toks[j + 1:], ctx)
@@ -1467,6 +1480,9 @@ def mentions_guarded_things(command):
             or bool(re.search(r"\b(?:curl|wget)\b", plain)))
 
 
+CURL_WORD_RE = re.compile(r"\b(?:curl|wget)\b")
+
+
 def bash_posts(command, ctx):
     if not isinstance(command, str):
         return []
@@ -1485,7 +1501,7 @@ def bash_posts(command, ctx):
     try:
         return scan(command, ctx)
     except Exception:
-        return [Post([], None, None, "the command could not be parsed")] if gated else []
+        return [Post([], None, None, "the command could not be parsed")] if gated or CURL_WORD_RE.search(command) else []
 
 
 def applescript_posts(script, ctx):

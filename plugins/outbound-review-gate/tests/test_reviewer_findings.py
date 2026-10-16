@@ -1041,7 +1041,8 @@ class TestBuild8(ShellCase):
     def test_curl_and_wget_behind_exec_wrappers_are_gated(self):
         for command in (f"timeout 5 curl -d x {self.GH}", f"nohup curl -d x {self.GH}", f"sudo curl -d x {self.GH}",
                         f"env -u X curl -d x {self.GH}", f"exec curl -d x {self.GH}",
-                        f"echo u | xargs curl -d x {self.GH}", f"nice wget --post-data=x {self.GH}"):
+                        f"echo u | xargs curl -d x {self.GH}", f"nice wget --post-data=x {self.GH}",
+                        f"time -p curl -d x {self.GH}"):
             with self.subTest(command):
                 self.assertDenied(self.bash(command, env=self.NONE))
 
@@ -1104,6 +1105,48 @@ class TestBuild8(ShellCase):
         else:
             reason = self.assertDenied(self.mcp(mcp["tool"], mcp["tool_input"], env=self.NONE))
         return scope_of(reason)
+
+
+class TestBuild9(ShellCase):
+    """Fourth hub review: the helper rule is strict only for the command word, and four claims made true."""
+
+    H = "~/.claude/hooks/outbound-comment-review-gate"
+    NONE = {"OUTBOUND_GATE_OWNED": "none/*"}
+
+    def test_naming_the_helper_behind_wrappers_and_interpreters_is_not_running_it(self):
+        h = self.H
+        for command in (f"find ~/.claude -name outbound-comment-review-gate -type f 2>/dev/null",
+                        f"timeout 60 python3 -m py_compile {h} tests/t.py", f"env X=1 git commit -m x {h} tests/t.py",
+                        f"nohup git add {h} tests/t.py", f"perl -pi -e 's/a/b/' {h} tests/t.py",
+                        f"node --check {h} tests/t.py"):
+            with self.subTest(command):
+                self.assertAllowed(self.shell(command))
+
+    def test_unlisted_wrappers_cannot_hide_a_record_call(self):
+        h, f = self.H, "--repo a/b --body x"
+        for command in (f"caffeinate {h} record {f}", f"uv run {h} record {f}", f"ionice -c3 {h} record {f}",
+                        f"time -p {h} record {f}", f"python3 -m cProfile -o /dev/null {h} record {f}",
+                        f"caffeinate {h} $R {f}"):
+            with self.subTest(command):
+                self.assertDenied(self.shell(command))
+                self.assertAllowed(self.shell(command, agent=True))
+
+    def test_in_reply_to_inside_an_input_file_is_part_of_the_scope(self):
+        scopes = []
+        for n in (5, 6):
+            (self.work / "reply.json").write_text(json.dumps({"body": "x", "in_reply_to": n}))
+            reason = self.assertDenied(self.bash(f"gh api -X POST repos/{TP}/pulls/5/comments --input {self.work}/reply.json",
+                                                 env=self.NONE))
+            scopes.append(scope_of(reason)["target"])
+        self.assertNotEqual(scopes[0], scopes[1])
+
+    def test_a_git_alias_whose_value_has_several_words_is_scanned(self):
+        self.assertDenied(self.bash(f"git -c alias.p='!gh pr' p comment 7 -R {TP} -b x"))
+
+    def test_the_budget_also_fails_closed_for_curl_and_wget(self):
+        slow = {"OUTBOUND_GATE_BUDGET": "0.000001"}
+        self.assertDenied(self.bash("echo a; echo b; curl -d x https://example.test/hook", env=slow))
+        self.assertAllowed(self.bash("echo a; echo b; ls", env=slow))
 
 
 class TestHelperRobustness(GateCase):
