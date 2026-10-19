@@ -31,9 +31,13 @@ frequency starts to mean something. A single occurrence of anything below means 
 
 ## These markers are biased against non-native English writers
 
-Liang et al. (2023), *GPT detectors are biased against non-native English writers*, found that GPT
-detectors misclassified a majority of TOEFL essays by non-native speakers as machine-generated while
-classifying native-speaker essays almost perfectly. The markers of "AI writing" overlap heavily with
+Liang et al. (2023), *GPT detectors are biased against non-native English writers*
+(arXiv:2304.02819, published in *Patterns*), ran seven GPT detectors over 91 TOEFL essays by
+non-native writers and 88 US eighth-grade essays. Accuracy on the eighth-grade essays was
+near-perfect. Over half the TOEFL essays were misclassified as "AI-generated", an average
+false-positive rate of 61.22%, and 89 of the 91 (97.80%) were flagged by at least one detector.
+Read the figures as the authors frame them: a pilot study on small samples, and most of the
+detectors tested were built on a GPT-2 backbone. The markers of "AI writing" overlap heavily with
 the markers of careful, formally-learned English: controlled vocabulary, even sentence length,
 conventional transitions, low idiom.
 
