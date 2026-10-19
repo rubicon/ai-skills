@@ -47,6 +47,15 @@ jobs:
       - name: loadout script test suite
         run: python3 plugins/loadout/tests/test_loadout.py
 
+  right-stuff-guard-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: right-stuff-guard hook test suite
+        run: python3 plugins/right-stuff-guard/tests/test_check_ask_markers.py
+
   validate-gates:
     runs-on: ubuntu-latest
     timeout-minutes: 5
