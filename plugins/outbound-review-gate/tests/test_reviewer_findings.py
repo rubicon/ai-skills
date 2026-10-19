@@ -1131,6 +1131,25 @@ class TestBuild9(ShellCase):
                 self.assertDenied(self.shell(command))
                 self.assertAllowed(self.shell(command, agent=True))
 
+    def test_a_double_dash_does_not_hide_record_behind_a_wrapper(self):
+        h = self.H
+        for command in (f"nohup {h} -- record $A", f"timeout 5 {h} -- record $A", f"env X=1 {h} -- record $A",
+                        f"exec {h} -- record $A", f"caffeinate {h} -- record $A", f"uv run {h} -- record $A",
+                        f"nohup {h} -- $(echo record) --repo a/b", f"{h} -- record $A"):
+            with self.subTest(command):
+                self.assertDenied(self.shell(command))
+                self.assertAllowed(self.shell(command, agent=True))
+
+    def test_a_help_flag_elsewhere_in_the_command_does_not_excuse_record(self):
+        h = self.H
+        for command in (f"find . -maxdepth 0 -name -h -o -exec {h} record $A \\;",
+                        f"echo x | xargs -I -h {h} record $A", f"nohup {h} record $A --help"):
+            with self.subTest(command):
+                self.assertDenied(self.shell(command))
+        self.assertAllowed(self.shell(f"{h} --help"))
+        self.assertAllowed(self.shell(f"{h} record -h"))
+        self.assertAllowed(self.shell(f"nohup {h} -h"))
+
     def test_in_reply_to_inside_an_input_file_is_part_of_the_scope(self):
         scopes = []
         for n in (5, 6):

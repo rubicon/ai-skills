@@ -1170,21 +1170,25 @@ def main_thread_helper_use(toks, expanded, base, word, rest, ctx, ci=0):
         return True
     if "--verdict" in toks and "--findings" in toks and base not in NON_EXEC:
         return True
-    if {"--help", "-h"} & set(toks) and base not in COPIERS:
-        return False
     at = [j for j, t in enumerate(expanded) if not ASSIGN_RE.match(toks[j]) and os.path.basename(restore(t)) == HELPER]
     if base in COPIERS and at:
         return True
     if base not in NON_EXEC:
         for j in at:
-            if j + 1 >= len(toks):
+            k = j + 1
+            while k < len(toks) and expanded[k] == "--":
+                k += 1
+            if k >= len(toks):
                 continue
-            arg = expanded[j + 1]
-            if j == ci:
+            arg = expanded[k]
+            if is_literal(arg) and (arg in ("--help", "-h") or (
+                    arg in ("record", "disposition", "hash") and k + 1 < len(toks) and expanded[k + 1] in ("--help", "-h"))):
+                continue
+            if j == ci and k == j + 1:
                 # The helper is the command: only disposition, hash and help are allowed, literally.
                 if not is_literal(arg) or arg not in HELPER_ARGS:
                     return True
-            elif not is_literal(arg) or arg == "record":
+            elif j == ci or not is_literal(arg) or arg == "record":
                 # Named behind some wrapper or option: ordinary commands (find -name, git add, sed) that merely
                 # mention the helper pass; a literal `record` or an argument built by the shell is denied.
                 return True
