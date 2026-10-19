@@ -66,6 +66,7 @@ Install from this repository's marketplace (`rubicon`):
 | [session-messaging](plugins/session-messaging/README.md) | Cross-session messaging for Claude Code Desktop — how sessions message each other and report their own address |
 | [pitstop](plugins/pitstop/README.md) | Save what a compact or clear would destroy, then rebuild status after it, with a verified handoff |
 | [loadout](plugins/loadout/README.md) | Audit which plugins and skills a project loads, recommend a per-project set, apply it after approval, and verify it from fresh sessions |
+| [outbound-review-gate](plugins/outbound-review-gate/README.md) | Deny posts to third-party repos unless a review receipt exists for the exact text |
 | [right-stuff-guard](plugins/right-stuff-guard/README.md) | A PreToolUse hook that denies an AskUserQuestion call whose option labels break the right-stuff marker rules, so the model fixes them and asks again |
 | [rubicon-marketing-board](https://github.com/rubicon/rubicon-marketing-board) | A nine-seat marketing advisory board for Claude Code (external source) |
 
