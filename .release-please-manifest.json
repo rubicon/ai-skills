@@ -1,5 +1,5 @@
 {
-  ".": "2.1.0",
+  ".": "2.2.1",
   "skills/secret-santa-generator": "4.0.1",
   "skills/work-evidence-research": "1.0.1",
   "skills/rubicon-wordpress-version-lab": "1.0.1",
@@ -19,5 +19,6 @@
   "plugins/loadout": "0.1.0",
   "plugins/salience": "0.5.1",
   "plugins/session-messaging": "0.1.0",
+  "plugins/outbound-review-gate": "0.1.0",
   "plugins/right-stuff-guard": "0.1.0"
 }
