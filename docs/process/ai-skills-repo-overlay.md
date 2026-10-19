@@ -89,7 +89,7 @@ This repository does not produce distributable artifacts on the private side. Re
 - Release titles use version-only: `X.Y.Z`.
 - Product name (for release notes): **Rubicon AI Skills**.
 - Release notes begin with: `Rubicon AI Skills vX.Y.Z (YYYY-MM-DD)`.
-- Update `CHANGELOG.md` before tagging.
+- Do not hand-edit `CHANGELOG.md` before tagging; release-please writes the release heading (see Versioning and Changelogs).
 - No release zip or checksum artifact is required.
 - Public GitHub releases are appropriate only when public skill content changes.
 - Do not cut GitHub releases for private doc-only changes or local workflow updates.
