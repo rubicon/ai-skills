@@ -5,6 +5,14 @@ All notable changes to the Salience plugin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1](https://github.com/rubicon/ai-skills/compare/salience-v0.5.0...salience-v0.5.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* **salience:** give the Liang citation its figures, source and scope ([#177](https://github.com/rubicon/ai-skills/issues/177)) ([94fcff2](https://github.com/rubicon/ai-skills/commit/94fcff2b472e767164c35db0392e54ee3d11c269))
+* **salience:** point follow-first guidance at the setting that still exists ([#175](https://github.com/rubicon/ai-skills/issues/175)) ([b614ff9](https://github.com/rubicon/ai-skills/commit/b614ff9e3fd417ad62b8cc6340d9c2b4e94e4855))
+
 ## [0.5.0] - 2026-09-23
 
 ### Added
