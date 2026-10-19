@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.2.1](https://github.com/rubicon/ai-skills/compare/v2.2.0...v2.2.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* bump rubicon-marketing-board marketplace pin to v0.1.3 ([#183](https://github.com/rubicon/ai-skills/issues/183)) ([50a9dfd](https://github.com/rubicon/ai-skills/commit/50a9dfd4b713025f4c6b529ac7b132430465e30c)), closes [#182](https://github.com/rubicon/ai-skills/issues/182)
+
 ## [2.2.0](https://github.com/rubicon/ai-skills/compare/v2.1.0...v2.2.0) (2026-10-19)
 
 
