@@ -48,8 +48,10 @@ Walk through these; several are frequently missed:
 - **Industry and location** — set accurately; both are hard filters in search
 - **"Providing services"** — turn on for consulting and fractional work; it creates a separate
   discovery surface most executives never enable
-- **Creator mode / follow-first** — appropriate for authority goals; changes the primary button from
-  Connect to Follow, which suits someone building an audience and hurts someone building a network
+- **"Make follow primary"** — appropriate for authority goals; changes the primary button from
+  Connect to Follow, which suits someone building an audience and hurts someone building a network.
+  Settings & Privacy → Visibility → Followers. Replaced Creator mode's follow-first toggle, which
+  LinkedIn retired in 2024. Verified 2026-10-18; search settings for "followers" if the label moved.
 
 ## Geography
 

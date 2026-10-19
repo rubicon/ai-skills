@@ -24,7 +24,7 @@
       "source": {
         "source": "github",
         "repo": "rubicon/rubicon-marketing-board",
-        "ref": "v0.1.1"
+        "ref": "v0.1.2"
       },
       "description": "A nine-seat marketing advisory board for Claude Code: decide, pressure-test, ideate, retrospect, and get smart — with advisors who challenge instead of cheerlead.",
       "author": {
