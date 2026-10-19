@@ -5,6 +5,20 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.2.0](https://github.com/rubicon/ai-skills/compare/v2.1.0...v2.2.0) (2026-10-19)
+
+
+### Features
+
+* add outbound-review-gate plugin ([#159](https://github.com/rubicon/ai-skills/issues/159)) ([763b87a](https://github.com/rubicon/ai-skills/commit/763b87a5a0b8ed1a564e61b78341256d503774c6))
+
+
+### Bug Fixes
+
+* bump rubicon-marketing-board marketplace pin to v0.1.2 ([#166](https://github.com/rubicon/ai-skills/issues/166)) ([58a878b](https://github.com/rubicon/ai-skills/commit/58a878b592d4861a3109c4c111e036ad7bf5bdbb)), closes [#165](https://github.com/rubicon/ai-skills/issues/165)
+* **salience:** give the Liang citation its figures, source and scope ([#177](https://github.com/rubicon/ai-skills/issues/177)) ([94fcff2](https://github.com/rubicon/ai-skills/commit/94fcff2b472e767164c35db0392e54ee3d11c269))
+* **salience:** point follow-first guidance at the setting that still exists ([#175](https://github.com/rubicon/ai-skills/issues/175)) ([b614ff9](https://github.com/rubicon/ai-skills/commit/b614ff9e3fd417ad62b8cc6340d9c2b4e94e4855))
+
 ## [2.1.0](https://github.com/rubicon/ai-skills/compare/v2.0.0...v2.1.0) (2026-10-14)
 
 
