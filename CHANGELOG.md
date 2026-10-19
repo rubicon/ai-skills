@@ -5,6 +5,54 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.2.1](https://github.com/rubicon/ai-skills/compare/v2.2.0...v2.2.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* bump rubicon-marketing-board marketplace pin to v0.1.3 ([#183](https://github.com/rubicon/ai-skills/issues/183)) ([50a9dfd](https://github.com/rubicon/ai-skills/commit/50a9dfd4b713025f4c6b529ac7b132430465e30c)), closes [#182](https://github.com/rubicon/ai-skills/issues/182)
+
+## [2.2.0](https://github.com/rubicon/ai-skills/compare/v2.1.0...v2.2.0) (2026-10-19)
+
+
+### Features
+
+* add outbound-review-gate plugin ([#159](https://github.com/rubicon/ai-skills/issues/159)) ([763b87a](https://github.com/rubicon/ai-skills/commit/763b87a5a0b8ed1a564e61b78341256d503774c6))
+
+
+### Bug Fixes
+
+* bump rubicon-marketing-board marketplace pin to v0.1.2 ([#166](https://github.com/rubicon/ai-skills/issues/166)) ([58a878b](https://github.com/rubicon/ai-skills/commit/58a878b592d4861a3109c4c111e036ad7bf5bdbb)), closes [#165](https://github.com/rubicon/ai-skills/issues/165)
+* **salience:** give the Liang citation its figures, source and scope ([#177](https://github.com/rubicon/ai-skills/issues/177)) ([94fcff2](https://github.com/rubicon/ai-skills/commit/94fcff2b472e767164c35db0392e54ee3d11c269))
+* **salience:** point follow-first guidance at the setting that still exists ([#175](https://github.com/rubicon/ai-skills/issues/175)) ([b614ff9](https://github.com/rubicon/ai-skills/commit/b614ff9e3fd417ad62b8cc6340d9c2b4e94e4855))
+
+## [2.1.0](https://github.com/rubicon/ai-skills/compare/v2.0.0...v2.1.0) (2026-10-14)
+
+
+### Features
+
+* add right-stuff-guard, a hook that denies malformed AskUserQuestion markers ([#157](https://github.com/rubicon/ai-skills/issues/157)) ([8c80f7b](https://github.com/rubicon/ai-skills/commit/8c80f7bb3a2c20844addb23bc6240684b363f6ae))
+
+## [2.0.0](https://github.com/rubicon/ai-skills/compare/v1.4.2...v2.0.0) (2026-10-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* the codebase-memory skill is removed. Install codebase-memoir with skillshare -s codebase-memoir instead of -s codebase-memory.
+
+### Features
+
+* add codex-review, an independent review with the Codex CLI ([#140](https://github.com/rubicon/ai-skills/issues/140)) ([154794a](https://github.com/rubicon/ai-skills/commit/154794a2583a7afcf2769cf4384326b9f6758240))
+* add right-stuff, pop-up questions that mark a recommendation and the right thing ([#144](https://github.com/rubicon/ai-skills/issues/144)) ([bd9e03b](https://github.com/rubicon/ai-skills/commit/bd9e03b776e05ab5a80f580326158dd5553c293c))
+* replace codebase-memory with codebase-memoir, the maintained version ([#127](https://github.com/rubicon/ai-skills/issues/127)) ([b0ce643](https://github.com/rubicon/ai-skills/commit/b0ce6439db36d8cd8323bd3d26f8fed992b6bd9f))
+
+
+### Bug Fixes
+
+* **codebase-memoir:** correct nine accuracy gaps ([#153](https://github.com/rubicon/ai-skills/issues/153)) ([975a9b1](https://github.com/rubicon/ai-skills/commit/975a9b1b0d88a61a874bb6a96f75f172c9073982))
+* **pitstop:** count ref moves onto older commits as drift ([#142](https://github.com/rubicon/ai-skills/issues/142)) ([f3056f5](https://github.com/rubicon/ai-skills/commit/f3056f5e4d337f4b144ca50b8eddac7798b2b50c))
+* **pitstop:** describe every drift form and what none means ([#143](https://github.com/rubicon/ai-skills/issues/143)) ([659d19f](https://github.com/rubicon/ai-skills/commit/659d19f98035f2f650a5b3b07094d1e0dd8b37d9))
+
 ## [1.4.2](https://github.com/rubicon/ai-skills/compare/v1.4.1...v1.4.2) (2026-10-12)
 
 
