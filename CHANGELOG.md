@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.3.0](https://github.com/rubicon/ai-skills/compare/v2.2.1...v2.3.0) (2026-10-22)
+
+
+### Features
+
+* **session-messaging:** output session-whoami address in a copyable code block ([#186](https://github.com/rubicon/ai-skills/issues/186)) ([683ae6f](https://github.com/rubicon/ai-skills/commit/683ae6fd09ceb0e6ac9bc52c837b86a43f3eb56f)), closes [#185](https://github.com/rubicon/ai-skills/issues/185)
+
 ## [2.2.1](https://github.com/rubicon/ai-skills/compare/v2.2.0...v2.2.1) (2026-10-19)
 
 
