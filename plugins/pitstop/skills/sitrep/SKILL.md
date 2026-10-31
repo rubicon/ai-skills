@@ -8,7 +8,13 @@ version: 0.1.0
 
 Read-only. Never commit, push, deploy, post, or write any file.
 
-Optional focus: `$ARGUMENTS`. If given, filter every section to it.
+Arguments: `$ARGUMENTS`. When its first word is exactly `project` or `everything`, that word is the scope and the rest is the focus. Otherwise the scope is `session` and all of it is the focus. If a focus is given, filter every section to it.
+
+| Scope | Handoffs | Git and GitHub |
+|---|---|---|
+| `session` (default) | This session's own handoff, or, after a clear gave the session a new id, the newest one parked from this folder | This branch or worktree, its pull request, and the issues its handoff names |
+| `project` | Every handoff in the project | The whole repository |
+| `everything` | Every handoff under each folder in the config's `## Project roots` section | Each of those folders |
 
 ## 0. Locate
 
@@ -22,10 +28,10 @@ If `config:` is `none` or `invalid`, say "pitstop: not configured, using default
 ## 1. Gather, in parallel where independent
 
 - What this conversation already holds. If it holds nothing, say so in one line.
-- Every handoff in the handoff directory: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --list --config "${CLAUDE_PLUGIN_DATA}/integrations.md"` prints one line per file as `path | session <id or none> | <N> min`. There is more than one when two sessions parked in the same folder. Read each, unless it is already in this session's context. A line with `session none` was written before handoffs carried a session id.
+- The handoffs in scope: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --list --scope <scope> --config "${CLAUDE_PLUGIN_DATA}/integrations.md"` prints one line per file as `path | session <id or none> | <N> min`, ending `| root <folder>` in `everything` scope, plus lines starting `note: `. Read each file, unless it is already in this session's context. A line with `session none` was written before handoffs carried a session id. Repeat every `note: ` line under Health. In `session` scope a note means the handoff shown is not this session's own, or that none was found; then say that `/pitstop:sitrep project` lists every handoff in the project. In `everything` scope a note that the config has no roots in a `## Project roots` section means the listing is the `project` one: report the scope as `project` and say `/pitstop:setup` adds the section.
 - For each of those files: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --root "<root path>" "<handoff path>"`. Its output gives findings, the handoff's age, and the drafts on disk. Exit 1 means findings, not a broken tool. Exit 2 means there is no readable handoff, or it could not be verified.
-- Git, every command bounded: `git status --short | head -20`, `git branch --show-current`, `git log --oneline -10`, `git stash list | head -5`, `git worktree list`.
-- When `gh` is present: `gh pr list --author @me --state open --json number,title,isDraft,url`, `gh pr checks <n>` for each, and `gh issue view <n> --json number,state,title,url` for each issue the handoff names.
+- Git, every command bounded. In `session` scope, this branch or worktree only: `git status --short | head -20`, `git branch --show-current`, `git log --oneline -10`, `git rev-list --left-right --count HEAD...@{upstream}` when an upstream exists. In `project` scope, those plus `git stash list | head -5` and `git worktree list`. In `everything` scope, the `project` set in each listed folder, with `git -C <folder>`.
+- When `gh` is present. In `session` scope: `gh pr view --json number,title,state,isDraft,url` for this branch, `gh pr checks <n>` for that pull request, and `gh issue view <n> --json number,state,title,url` for each issue the handoff names. In `project` scope: `gh pr list --author @me --state open --json number,title,isDraft,url`, `gh pr checks <n>` for each, and `gh issue view` for each issue a handoff names. In `everything` scope, the `project` set run from each listed folder.
 - Each Status sources entry from the config. Delegate any source with bulky output to a small-model subagent that answers in at most three lines.
 
 Read every exit code. Empty output with a non-zero exit is an error, not "nothing found".
@@ -33,7 +39,7 @@ Read every exit code. Empty output with a non-zero exit is an error, not "nothin
 ## 2. Reconcile
 
 - Ground truth beats the handoff. Name each stale claim and what replaced it.
-- With more than one handoff, they come from different sessions and may disagree. Name each by its session and age, never blend them into one account, and never pick one as the real one. Where they conflict about what is done or what comes next, ground truth decides and the conflict goes under Needs you.
+- In `project` and `everything` scope, more than one handoff means they come from different sessions, and they may disagree. Name each by its session and age, never blend them into one account, and never pick one as the real one. Where they conflict about what is done or what comes next, ground truth decides and the conflict goes under Needs you.
 - An item the handoff calls done but ground truth does not confirm stays outstanding, marked "reported, not verified".
 - An identifier the verifier reports as `MISSING-...` or `ACKNOWLEDGED` is repeated only with "unverified" beside it.
 - A path the verifier does not flag exists somewhere: in the project, a worktree, or some branch. Never call it wrong because the current branch lacks it.
@@ -55,7 +61,7 @@ Each with its evidence (commit, full URL, or file) and tagged `verified` or `rep
 Priority is High, Medium, or Low. Add `[BLOCKING: <what it blocks>]` when something else cannot proceed until it is done. Blocking rows first.
 
 ### Health
-One line each: branch (clean or dirty, ahead or behind), handoff age (one per handoff, with its session when there is more than one), then one line per configured status source reading ran, skipped, or unavailable.
+One line each: the scope, branch (clean or dirty, ahead or behind; one per folder in `everything` scope), handoff age (one per handoff, with its session when there is more than one), each `note: ` line from the listing, then one line per configured status source reading ran, skipped, or unavailable.
 
 ### Do first
 The single next action, in one sentence.

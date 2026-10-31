@@ -23,7 +23,7 @@ Then find out whether this session may write the handoff path:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --claim --config "${CLAUDE_PLUGIN_DATA}/integrations.md"
 ```
 
-It prints `session:`, `existing:`, `drift:`, and `write:`. `write:` is where the handoff goes, and it is already reserved for this session, so no other session can be given it. It is the `handoff:` path when `existing:` is `none` or `own`. When `existing:` starts with `other` or `unstamped`, another session's handoff is sitting at `handoff:`, and `write:` is a sibling file beside it.
+It prints `session:`, `folder:`, `existing:`, `drift:`, and `write:`. `folder:` is the checkout or worktree this session parked from; the handoff carries it so that a session that comes back after `/clear` under a new id still finds this handoff. `write:` is where the handoff goes, and it is already reserved for this session, so no other session can be given it. It is the `handoff:` path when `existing:` is `none` or `own`. When `existing:` starts with `other` or `unstamped`, another session's handoff is sitting at `handoff:`, and `write:` is a sibling file beside it.
 
 `drift:` is `none`, `unknown (not a git project, so nothing to compare the handoff with)`, or a list of what the project has gained since this session's own earlier handoff was written, such as `2 commits, refs moved, 1 file changed since the handoff was written (4 min ago)`. Any part of the list may be missing. `refs moved` means git rewrote its ref storage: usually a ref moved, but some commands rewrite it without moving one, and a new commit prints it too. The `--claim` usage text in `handoff-verify.py` says more. It is measured only against your own earlier handoff, never another session's.
 
@@ -58,25 +58,26 @@ Every file listed there, old or new, is an unsent draft the handoff must name. W
 
 ## 2. Handoff
 
-`default`: write the `write:` path with exactly these sections, and the `Session:` line the script gave you:
+`default`: write the `write:` path with exactly these sections, and the `Session:` and `Folder:` lines the script gave you:
 
 ```markdown
 # Handoff
 Session: <the session: value>
+Folder: <the folder: value>
 
 ## State
 ## Next
 ## Context
 ```
 
-`custom`: follow the Handoff section's `instructions`. They may change what the handoff says or send a copy elsewhere, but the handoff is still written to the `write:` path and still carries the `Session:` line, because step 3 verifies that file and `--claim` reads that line.
+`custom`: follow the Handoff section's `instructions`. They may change what the handoff says or send a copy elsewhere, but the handoff is still written to the `write:` path and still carries the `Session:` and `Folder:` lines, because step 3 verifies that file, `--claim` reads the `Session:` line, and sitrep finds the handoff after a clear by its `Folder:` line.
 
 Either way:
 
 - A handoff this session did not write is not yours to change. Do not edit it, append to it, merge it into yours, quote it, or paraphrase it, and do not ask the user what to do about it. The `write:` path already keeps you from overwriting it. When `existing:` starts with `other` or `unstamped`, say in your reply that you did not overwrite another handoff and name its path. If the prune below then moves that file because it is stale, its `pruned:` line says so.
 - When `drift:` is not `none`, your context may be older than the project: a resumed, relocated, or truncated session still holds what it knew when it last wrote. Re-derive every claim about git, PR, issue, worktree, or file state with a command run now, and write what the command printed, not what you remember. A claim about what a file contains is re-derived by reading that file now, whatever else is refused. Your earlier handoff and the journal hold what you knew then, so reading them re-derives nothing. When `drift:` starts with `unknown`, treat every claim about git, PR, issue, worktree, or file state that you did not re-derive now as inherited. A claim you cannot re-derive now stays out, or keeps its line and carries `(inherited, <N> min old)` using the age `drift:` printed, or, when `drift:` is `unknown`, the age in `existing: own (<N> min)`, so the next reader knows it was not checked. That includes anything the user told you that this session never checked, such as a PR's state: write it as `<the claim> (inherited, <N> min old)`, with that exact marker.
 - When `drift:` is `none`, park still runs in full: write the whole handoff to the `write:` path and run steps 3 to 6. `none` means the script counted nothing new, or had no handoff of yours at the `handoff:` path to count from. It does not mean nothing moved. A claim the user told you that this session never checked says so in words instead of carrying `(inherited, <N> min old)`.
-- `/pitstop:sitrep` lists every handoff beside the configured one, so the sibling is found without anyone being told.
+- `/pitstop:sitrep` finds this handoff by its `Session:` line, or after a clear by its `Folder:` line, wherever `write:` put it, and `/pitstop:sitrep project` lists every handoff beside the configured one, so the sibling is found without anyone being told.
 
 - Next names the path of every file in the drafts directory, in backticks.
 - Every file path, line anchor, commit, ID, and URL is copied exactly from where it appears in this session, or left out. Never retype one from memory and never shorten one.
@@ -89,7 +90,7 @@ Either way:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --root "<root path>" --session "<the session: value>" "<write path>"
 ```
 
-Exit 2 means the handoff could not be read or verified: report the message and stop retrying. On exit 1, fix each finding from a first-hand read: correct it, remove it, or mark the line `(unverified)`. For `STAMP-MISMATCH`, the file lost its `Session:` line or carries another id: put `Session: <the session: value>` back on line 2 and run it again. A sibling handoff (`remember-*.md`) without its stamp is invisible to sitrep and to cleanup. For `DRAFT-WITHOUT-FILE`, `MISSING-DRAFT`, `EMPTY-DRAFT`, or `UNLISTED-DRAFT`, go back to step 1. For `DONE-DRAFT-CLAIMED`, the text was sent: stop calling it unsent. Run it again until it exits 0.
+Exit 2 means the handoff could not be read or verified: report the message and stop retrying. On exit 1, fix each finding from a first-hand read: correct it, remove it, or mark the line `(unverified)`. For `STAMP-MISMATCH`, the file lost its `Session:` line or carries another id: put `Session: <the session: value>` back on line 2 and run it again. For `FOLDER-MISSING`, put `Folder: <the folder: value>` back on line 3 and run it again. A sibling handoff (`remember-*.md`) without its stamp is invisible to sitrep and to cleanup. For `DRAFT-WITHOUT-FILE`, `MISSING-DRAFT`, `EMPTY-DRAFT`, or `UNLISTED-DRAFT`, go back to step 1. For `DONE-DRAFT-CLAIMED`, the text was sent: stop calling it unsent. Run it again until it exits 0.
 
 Then remove stale handoffs, so they do not pile up:
 

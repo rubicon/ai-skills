@@ -6,9 +6,21 @@ A long Claude Code session ends in a compact or a clear, and both throw context 
 
 ## Commands
 
-- `/pitstop:park`: before a compact or clear. Saves drafts, writes and verifies the handoff, writes the journal entry, and tells you whether to clear or compact. If another session already parked a handoff in this folder, park leaves it in place and writes its own beside it as `remember-<session>.md`, and sitrep reads them all. So handoffs do not pile up, park also moves any handoff nobody has touched for 30 days, including another session's, into a `pruned/` folder beside it and says which it moved. Nothing is deleted, and pitstop never reads or empties `pruned/`, so clear it when you like.
+- `/pitstop:park`: before a compact or clear. Saves drafts, writes and verifies the handoff, writes the journal entry, and tells you whether to clear or compact. If another session already parked a handoff in this folder, park leaves it in place and writes its own beside it as `remember-<session>.md`. Each handoff is stamped with the session and the folder it was parked from. So handoffs do not pile up, park also moves any handoff nobody has touched for 30 days, including another session's, into a `pruned/` folder beside it and says which it moved. Nothing is deleted, and pitstop never reads or empties `pruned/`, so clear it when you like.
 - `/pitstop:sitrep`: at the start of a session. Reports what needs you, what is done, and what is outstanding. Read-only.
 - `/pitstop:catch-up`: coming back after time away. Two or three sentences on where the current branch stands and the next real piece of work. Read-only. Use `sitrep` for everything else in flight.
+
+### Scope
+
+sitrep and catch-up take an optional scope as their first word. Anything after it is a focus.
+
+| Command | Reads |
+|---|---|
+| `/pitstop:sitrep` | This session's handoff, and git and GitHub for this branch or worktree, its pull request, and the issues the handoff names. After `/clear`, a session may run under a new id; it then gets the newest handoff parked from the same checkout or worktree. |
+| `/pitstop:sitrep project` | Every handoff in the project, and the whole repository. |
+| `/pitstop:sitrep everything` | Every handoff in each folder listed under `## Project roots` in the configuration. Without that section, it says so and reads the project. |
+
+catch-up takes the same scopes and still answers in a few sentences.
 - `/pitstop:checkpoint`: the journal entry on its own, plus fact updates when Facts is configured.
 - `/pitstop:setup`: route the handoff, journal, decision records, status checks, or facts to tools you already use.
 
@@ -23,7 +35,7 @@ Requires `python3` on your PATH. `git` and `gh` are used when present.
 
 ## Configuration
 
-None is required. With no configuration, the handoff goes to `.remember/remember.md` in the project, drafts to `.remember/drafts/`, and the journal to `.remember/journal.md`. Run `/pitstop:setup` to change that, or to turn on Facts: an optional section that points checkpoint at a fact store you already use (any tool that looks up, adds, and replaces a subject, predicate, and value). With Facts on, checkpoint looks up each fact this session confirmed, replaces a changed value instead of adding a second one, adds new ones, and skips anything unconfirmed, multi-valued, or in conflict. It stops at the first store error. setup writes one file in the plugin's data directory, which is removed if you uninstall the plugin.
+None is required. With no configuration, the handoff goes to `.remember/remember.md` in the project, drafts to `.remember/drafts/`, and the journal to `.remember/journal.md`. Run `/pitstop:setup` to change that, to list the folders `everything` scope reads in an optional `## Project roots` section (one absolute or `~/` path per `- ` line), or to turn on Facts: an optional section that points checkpoint at a fact store you already use (any tool that looks up, adds, and replaces a subject, predicate, and value). With Facts on, checkpoint looks up each fact this session confirmed, replaces a changed value instead of adding a second one, adds new ones, and skips anything unconfirmed, multi-valued, or in conflict. It stops at the first store error. setup writes one file in the plugin's data directory, which is removed if you uninstall the plugin.
 
 ## What the verifier checks
 
