@@ -1605,6 +1605,24 @@ class HandoffScope(unittest.TestCase):
                          sorted([(here, f"root {self.repo.root}"), (there, f"root {other.root}")]))
         self.assertEqual(notes, [])
 
+    def test_everything_lists_a_shared_handoff_directory_once_labelled_by_each_files_folder(self):
+        other = Repo()
+        self.addCleanup(other.tmp.cleanup)
+        shared = os.path.join(self.repo.root, "shared-handoffs")
+        os.makedirs(shared)
+        here = os.path.join(shared, "remember.md")
+        there = os.path.join(shared, f"remember-{SESSION_B}.md")
+        with open(here, "w") as fh:
+            fh.write(f"# Handoff\nSession: {SESSION_A}\nFolder: {self.repo.root}\n")
+        with open(there, "w") as fh:
+            fh.write(f"# Handoff\nSession: {SESSION_B}\nFolder: {other.root}\n")
+        cfg = os.path.join(self.repo.root, "integrations.md")
+        with open(cfg, "w") as fh:
+            fh.write(f"---\nhandoff_path: {here}\n---\n## Project roots\n- {self.repo.root}\n- {other.root}\n")
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual(sorted((r[0], r[3]) for r in rows),
+                         sorted([(here, f"root {self.repo.root}"), (there, f"root {other.root}")]))
+
     def test_everything_without_the_section_says_so_and_falls_back_to_project(self):
         self.handoff("remember.md", SESSION_A)
         self.handoff(f"remember-{SESSION_B}.md", SESSION_B)

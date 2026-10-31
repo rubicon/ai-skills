@@ -87,7 +87,9 @@ Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .rem
                 A handoff with no Folder line matches only by its own session id.
                 project: every handoff in the handoff directory.
                 everything: every handoff under each root in the config's "## Project roots" section,
-                each line ending "| root <root>". Without that section, a note, then project.
+                each line ending "| root <root>": the file's Folder line when it has one, so a
+                directory shared by several roots is listed once. Without that section, a note,
+                then project.
         handoff-verify.py --prune [--days N] [--config FILE]
                 moves handoffs older than N days (default 30) into pruned/ beside them and
                 prints "pruned: <path> -> <new path>" for each. Nothing is deleted, and pruned/
@@ -471,7 +473,7 @@ def everything_listing(cwd, config):
     if not roots:
         return [f"note: no roots in a \"## {ROOTS_SECTION}\" section of the config; showing --scope project"] + \
             [row(*h) for h in handoffs(cwd, config)]
-    out = []
+    out, seen = [], set()
     for entry in roots:
         root = os.path.expanduser(entry[2:].strip() if entry.startswith("- ") else entry)
         if not os.path.isabs(root):
@@ -480,7 +482,14 @@ def everything_listing(cwd, config):
             out.append(f"note: {root}: not found, skipped")
         else:
             found = handoffs(root, config)
-            out += [row(*h) + f" | root {root}" for h in found] or [f"note: {root}: no handoffs"]
+            if not found:
+                out.append(f"note: {root}: no handoffs")
+            # An absolute handoff_path gives every root the same directory: print each file once,
+            # under the folder it was parked from when it says so.
+            for h in found:
+                if os.path.realpath(h[0]) not in seen:
+                    seen.add(os.path.realpath(h[0]))
+                    out.append(row(*h) + f" | root {stamp(h[0], FOLDER) or root}")
     return out
 
 
