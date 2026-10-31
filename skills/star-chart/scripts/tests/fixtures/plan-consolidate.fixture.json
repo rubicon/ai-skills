@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "generated_at": "2026-06-15T00:00:00Z",
+  "based_on_export": "2026-06-15T00:00:00Z",
+  "lists_to_create": [
+    {"name": "AI Agents", "description": "Agent frameworks", "private": false, "reason": "Agent repos have no List yet"}
+  ],
+  "renames": [
+    {"list": "CLI Tools", "to": "Command Line", "description": null, "private": null, "reason": "Matches the other names"}
+  ],
+  "merges": [
+    {"lists": ["Parsing Libs"], "into": "Parsers", "reason": "Duplicates Parsers"}
+  ],
+  "deletions": [
+    {"list": "Parsing Libs", "reason": "Empty after the merge"},
+    {"list": "Old Stuff", "reason": "Already empty"}
+  ],
+  "assignments": [
+    {"repo": "sample-labs/legacy-sdk", "lists": ["AI Agents"], "reason": "SDK for agent hosting"},
+    {"repo": "boundary/at-cutoff", "lists": ["Command Line"], "reason": "Shell CLI"}
+  ],
+  "unstar": []
+}
