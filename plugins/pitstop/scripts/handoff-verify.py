@@ -27,13 +27,16 @@ draft file is never acknowledgeable.
 
 Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .remember/remember.md)
                 --root sets the project root outside git; pass the root: --where printed
-                --session ID also requires the file to carry "Session: ID", so a handoff that
-                lost its stamp fails here instead of becoming invisible to --list and --prune
+                --session ID also requires the file to carry "Session: ID" and a "Folder:" line, so
+                a handoff that lost either stamp fails here instead of becoming invisible to --list
+                and --prune
         handoff-verify.py --where [--config FILE]
                 prints root, config, handoff, drafts and journal, one
                 "key: value" line each, resolved from the working directory
         handoff-verify.py --claim [--session ID] [--config FILE]
-                reserves this session's handoff file and prints session, existing, drift and write.
+                reserves this session's handoff file and prints session, folder, existing, drift
+                and write. folder is the git top level of the working directory (the main checkout
+                or the worktree root), or the working directory itself outside git.
                 drift is "none", or the commits, ref moves and changed files (other than the
                 handoff, journal and drafts) since this session's own earlier handoff was written;
                 park re-derives its claims from git when it is not "none". "refs moved" means git
@@ -70,15 +73,21 @@ Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .rem
                 handoff or journal with a tool that writes a new file and renames it over the old
                 one, as Claude Code's Write and Edit do. That last one re-dates every uncommitted
                 deletion in the handoff's directory on each park.
-                park writes the handoff to "write:", which already holds a "Session: <id>"
-                stub. "write:" is the handoff path unless another session (or an unstamped
-                file) owns it, then a sibling named for this session. The reservation is
-                created exclusively, so two sessions cannot be given the same path.
+                park writes the handoff to "write:", which already holds a "Session: <id>" and
+                "Folder: <folder>" stub. "write:" is the handoff path unless another session (or
+                an unstamped file) owns it, then a sibling named for this session. The reservation
+                is created exclusively, so two sessions cannot be given the same path.
                 --session passes back the "session:" value an earlier claim printed, for a
                 session that has no id in its environment
-        handoff-verify.py --list [--config FILE]
-                one line per handoff in the handoff directory:
-                "path | session <id or none> | <N> min"
+        handoff-verify.py --list [--scope session|project|everything] [--session ID] [--config FILE]
+                one line per handoff: "path | session <id or none> | <N> min", and lines starting
+                "note: " that say what was or was not found.
+                session (the default): this session's own newest handoff; else the newest one whose
+                "Folder:" is this folder, after a note saying so; else a note naming --scope project.
+                A handoff with no Folder line matches only by its own session id.
+                project: every handoff in the handoff directory.
+                everything: every handoff under each root in the config's "## Project roots" section,
+                each line ending "| root <root>". Without that section, a note, then project.
         handoff-verify.py --prune [--days N] [--config FILE]
                 moves handoffs older than N days (default 30) into pruned/ beside them and
                 prints "pruned: <path> -> <new path>" for each. Nothing is deleted, and pruned/
@@ -104,10 +113,13 @@ NO_DRAFTS = re.compile(r"\b(?:none|no)\s+(?:\w+\s+)?(?:drafted|unposted|unsent)\
 ACK = "(unverified)"
 DEFAULT_HANDOFF = ".remember/remember.md"
 STAMP = re.compile(r"^Session:[ \t]*(\S+)[ \t]*$", re.M)
+FOLDER = re.compile(r"^Folder:[ \t]*(\S.*?)[ \t]*$", re.M)
+ROOTS_SECTION = "Project roots"
+SCOPES = ("session", "project", "everything")
 # The desktop app and the CLI both set the first; only the desktop app sets the second.
 SESSION_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_HOST_SESSION_ID")
 PRUNE_DAYS = 30
-MODES = {"--where": {"--config"}, "--list": {"--config"},
+MODES = {"--where": {"--config"}, "--list": {"--config", "--scope", "--session"},
          "--claim": {"--config", "--session"}, "--prune": {"--config", "--days"}}
 # A hung git (stale lock, slow network filesystem) must end as exit 2 through run(),
 # not block park or sitrep forever.
@@ -138,6 +150,27 @@ def read_header(path):
             return None
         header[key.strip()] = value.strip()
     return None
+
+
+def read_section(path, name):
+    """The non-blank lines under the integrations file's "## <name>" heading, up to the next "## ".
+    None if the file or the section is absent, which pitstop treats as skip."""
+    try:
+        with open(path, errors="replace") as fh:
+            lines = fh.read().split("\n")
+    except (OSError, TypeError):
+        return None
+    body = None
+    for line in lines:
+        line = line.rstrip("\r")
+        if line.startswith("## "):
+            if body is not None:
+                break
+            if line[3:].strip() == name:
+                body = []
+        elif body is not None and line.strip():
+            body.append(line.strip())
+    return body
 
 
 def git(root, *args, raw=False):
@@ -201,30 +234,37 @@ def where(cwd, config):
             ("drafts", os.path.join(hdir, "drafts")), ("journal", os.path.join(hdir, "journal.md"))]
 
 
+def env_session():
+    """This session's id from the environment, or None."""
+    return next((os.environ[v] for v in SESSION_VARS if os.environ.get(v)), None)
+
+
 def session_id():
     """This session's id from the environment. Without one, a fresh token: it never matches an
     existing stamp, so park writes a sibling rather than replacing anything."""
-    for var in SESSION_VARS:
-        if os.environ.get(var):
-            return os.environ[var]
-    return "anon-" + os.urandom(4).hex()
+    return env_session() or "anon-" + os.urandom(4).hex()
+
+
+def stamp(path, pattern):
+    """The value of the file's first line matching pattern, or None if it has none or cannot be read."""
+    try:
+        with open(path, errors="replace") as fh:
+            m = pattern.search(fh.read())
+    except OSError:
+        return None
+    return m.group(1) if m else None
 
 
 def handoff_owner(path):
     """The id in the file's Session line, or None if it has none or cannot be read."""
-    try:
-        with open(path, errors="replace") as fh:
-            m = STAMP.search(fh.read())
-    except OSError:
-        return None
-    return m.group(1) if m else None
+    return stamp(path, STAMP)
 
 
 def age_minutes(path):
     return int((time.time() - os.path.getmtime(path)) // 60)
 
 
-def reserve(path, me):
+def reserve(path, me, folder):
     """Create path stamped for me unless it exists. Returns (owner state, True if created).
     Exclusive creation is what makes two simultaneous claims land on different files."""
     try:
@@ -236,7 +276,7 @@ def reserve(path, me):
             return f"own ({age})", False
         return (f"other {owner} ({age})" if owner else f"unstamped ({age})"), False
     with os.fdopen(fd, "w") as fh:
-        fh.write(f"# Handoff\nSession: {me}\n")
+        fh.write(f"# Handoff\nSession: {me}\nFolder: {folder}\n")
     return "none", True
 
 
@@ -368,18 +408,19 @@ def claim_handoff(cwd, config, session=None):
     me = session or session_id()
     os.makedirs(os.path.dirname(handoff), exist_ok=True)
     moved = drift(handoff, me, places["journal"], places["drafts"])
-    existing, created = reserve(handoff, me)
+    folder = places["root"]
+    existing, created = reserve(handoff, me, folder)
     target = handoff
     if not created and not existing.startswith("own"):
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", me)
         n = 1
         while True:
             target = os.path.join(os.path.dirname(handoff), f"remember-{safe}" + (f"-{n}" if n > 1 else "") + ".md")
-            state, created = reserve(target, me)
+            state, created = reserve(target, me, folder)
             if created or state.startswith("own"):
                 break
             n += 1
-    return [("session", me), ("existing", existing), ("drift", moved), ("write", target)]
+    return [("session", me), ("folder", folder), ("existing", existing), ("drift", moved), ("write", target)]
 
 
 def handoff_files(cwd, config):
@@ -392,8 +433,55 @@ def handoff_files(cwd, config):
     return found + sorted(p for p in siblings if handoff_owner(p))
 
 
+def handoffs_of(paths):
+    return [(p, handoff_owner(p) or "none", age_minutes(p)) for p in paths]
+
+
 def handoffs(cwd, config):
-    return [(p, handoff_owner(p) or "none", age_minutes(p)) for p in handoff_files(cwd, config)]
+    return handoffs_of(handoff_files(cwd, config))
+
+
+def row(path, owner, age):
+    return f"{path} | session {owner} | {age} min"
+
+
+def session_listing(cwd, config, me):
+    """This session's newest handoff; else the newest one parked from this folder; else a note.
+    A handoff with no Folder line is never taken for this folder's: only its own session finds it."""
+    files = handoff_files(cwd, config)
+    newest = lambda paths: max(paths, key=os.path.getmtime)
+    own = [p for p in files if me and handoff_owner(p) == me]
+    if own:
+        return [row(*h) for h in handoffs_of([newest(own)])]
+    folder = dict(where(cwd, config))["root"]
+    here = os.path.realpath(folder)
+    same = [p for p in files if stamp(p, FOLDER) and os.path.realpath(stamp(p, FOLDER)) == here]
+    if same:
+        return [f"note: no handoff from this session; showing the newest parked from {folder}"] + \
+            [row(*h) for h in handoffs_of([newest(same)])]
+    n = len(files)
+    return [f"note: no handoff from this session or parked from {folder}; "
+            f"--scope project lists {n} handoff{'s' if n != 1 else ''} in the project"]
+
+
+def everything_listing(cwd, config):
+    """Every handoff under each root the config lists, labelled by root. A missing or empty section
+    is skipped, as every optional pitstop section is, so this falls back to project scope."""
+    roots = read_section(config, ROOTS_SECTION) if config else None
+    if not roots:
+        return [f"note: no roots in a \"## {ROOTS_SECTION}\" section of the config; showing --scope project"] + \
+            [row(*h) for h in handoffs(cwd, config)]
+    out = []
+    for entry in roots:
+        root = os.path.expanduser(entry[2:].strip() if entry.startswith("- ") else entry)
+        if not os.path.isabs(root):
+            out.append(f"note: {root}: not an absolute path, skipped")
+        elif not os.path.isdir(root):
+            out.append(f"note: {root}: not found, skipped")
+        else:
+            found = handoffs(root, config)
+            out += [row(*h) + f" | root {root}" for h in found] or [f"note: {root}: no handoffs"]
+    return out
 
 
 def prune(cwd, config, days):
@@ -427,6 +515,8 @@ def main(argv):
             if rest[i] not in MODES[flag] or rest[i] in opts:
                 ok = False
             opts[rest[i]] = rest[i + 1]
+        if ok and opts.get("--scope", "session") not in SCOPES:
+            ok = False
         days = PRUNE_DAYS
         if ok and "--days" in opts:
             if opts["--days"].isdigit() and int(opts["--days"]) >= 1:
@@ -439,8 +529,15 @@ def main(argv):
             return 2
         config = opts.get("--config")
         if flag == "--list":
-            for path, owner, age in handoffs(os.getcwd(), config):
-                print(f"{path} | session {owner} | {age} min")
+            scope, cwd = opts.get("--scope", "session"), os.getcwd()
+            if scope == "session":
+                lines = session_listing(cwd, config, opts.get("--session") or env_session())
+            elif scope == "everything":
+                lines = everything_listing(cwd, config)
+            else:
+                lines = [row(*h) for h in handoffs(cwd, config)]
+            for line in lines:
+                print(line)
         elif flag == "--prune":
             for path, dest, old in prune(os.getcwd(), config, days):
                 print(f"pruned: {path} -> {dest} ({old} days old)")
@@ -576,6 +673,9 @@ def main(argv):
             found = f"Session: {owner}" if owner else "no Session line"
             # Never acknowledgeable: an unstamped or mis-stamped handoff is invisible to --list.
             findings.append(f"STAMP-MISMATCH line 0: expected Session: {session_arg}, found {found}")
+        if not stamp(handoff, FOLDER):
+            # Never acknowledgeable: without it, a session back under a new id cannot find this handoff.
+            findings.append("FOLDER-MISSING line 0: no Folder line; copy the folder: value --claim printed")
 
     on_disk = sorted(f for f in os.listdir(drafts_dir)
                      if not f.startswith(".") and os.path.isfile(os.path.join(drafts_dir, f))) \
