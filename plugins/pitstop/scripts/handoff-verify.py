@@ -87,9 +87,9 @@ Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .rem
                 A handoff with no Folder line matches only by its own session id.
                 project: every handoff in the handoff directory.
                 everything: every handoff under each root in the config's "## Project roots" section,
-                each line ending "| root <root>": the file's Folder line when it has one, so a
-                directory shared by several roots is listed once. Without that section, a note,
-                then project.
+                each line ending "| root <root>". In a handoff directory several roots share, a
+                file is listed once, under the listed root its Folder line names, and left out
+                when it names none. Without that section, a note, then project.
         handoff-verify.py --prune [--days N] [--config FILE]
                 moves handoffs older than N days (default 30) into pruned/ beside them and
                 prints "pruned: <path> -> <new path>" for each. Nothing is deleted, and pruned/
@@ -473,7 +473,7 @@ def everything_listing(cwd, config):
     if not roots:
         return [f"note: no roots in a \"## {ROOTS_SECTION}\" section of the config; showing --scope project"] + \
             [row(*h) for h in handoffs(cwd, config)]
-    out, seen = [], set()
+    out, valid = [], []
     for entry in roots:
         root = os.path.expanduser(entry[2:].strip() if entry.startswith("- ") else entry)
         if not os.path.isabs(root):
@@ -481,16 +481,29 @@ def everything_listing(cwd, config):
         elif not os.path.isdir(root):
             out.append(f"note: {root}: not found, skipped")
         else:
-            found = handoffs(root, config)
-            if not found:
-                out.append(f"note: {root}: no handoffs")
-            # An absolute handoff_path gives every root the same directory: print each file once,
-            # under the folder it was parked from when it says so.
-            for h in found:
-                if os.path.realpath(h[0]) not in seen:
-                    seen.add(os.path.realpath(h[0]))
-                    out.append(row(*h) + f" | root {stamp(h[0], FOLDER) or root}")
-    return out
+            valid.append(root)
+    # An absolute handoff_path gives every root the same directory. There a file's Folder line
+    # names the root it belongs to: each file is listed once, under its own root, and files parked
+    # from projects that are not listed are left out. A file in a directory only one root uses, or
+    # with no Folder line, belongs to the root it was found under, even if its project has moved.
+    places = {r: dict(where(r, config)) for r in valid}
+    tops = {os.path.realpath(p["root"]): r for r, p in places.items()}
+    dirs = [os.path.realpath(os.path.dirname(p["handoff"])) for p in places.values()]
+    rows, seen, hit = [], set(), set()
+    for root in valid:
+        for h in handoffs(root, config):
+            real = os.path.realpath(h[0])
+            if real in seen:
+                continue
+            seen.add(real)
+            folder = stamp(h[0], FOLDER)
+            shared = dirs.count(os.path.dirname(real)) > 1
+            owner = tops.get(os.path.realpath(folder)) if folder and shared else root
+            if owner:
+                hit.add(owner)
+                rows.append(row(*h) + f" | root {owner}")
+    out += [f"note: {r}: no handoffs" for r in valid if r not in hit]
+    return out + rows
 
 
 def prune(cwd, config, days):

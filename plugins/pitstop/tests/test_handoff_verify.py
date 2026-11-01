@@ -1623,6 +1623,43 @@ class HandoffScope(unittest.TestCase):
         self.assertEqual(sorted((r[0], r[3]) for r in rows),
                          sorted([(here, f"root {self.repo.root}"), (there, f"root {other.root}")]))
 
+    def shared_setup(self, stamps):
+        """A handoff directory shared by every root through an absolute handoff_path, holding one
+        handoff per (name, folder) in stamps, and a config listing this repo and one other."""
+        other = Repo()
+        self.addCleanup(other.tmp.cleanup)
+        shared = os.path.join(self.repo.root, "shared-handoffs")
+        os.makedirs(shared)
+        canonical = os.path.join(shared, "remember.md")
+        paths = {}
+        for name, folder in stamps(other):
+            paths[name] = os.path.join(shared, name)
+            with open(paths[name], "w") as fh:
+                fh.write(f"# Handoff\nSession: {name}\nFolder: {folder}\n")
+        cfg = os.path.join(self.repo.root, "integrations.md")
+        with open(cfg, "w") as fh:
+            fh.write(f"---\nhandoff_path: {canonical}\n---\n## Project roots\n- {self.repo.root}\n- {other.root}\n")
+        return other, paths, cfg
+
+    def test_everything_skips_a_shared_handoff_from_a_project_that_is_not_listed(self):
+        other, paths, cfg = self.shared_setup(lambda other: [
+            ("remember.md", self.repo.root), ("remember-x.md", other.root),
+            ("remember-y.md", "/elsewhere/unlisted-project")])
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual(sorted(r[0] for r in rows), sorted([paths["remember.md"], paths["remember-x.md"]]))
+
+    def test_everything_notes_a_listed_root_with_no_handoff_in_a_shared_directory(self):
+        other, paths, cfg = self.shared_setup(lambda other: [("remember.md", self.repo.root)])
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual([(r[0], r[3]) for r in rows], [(paths["remember.md"], f"root {self.repo.root}")])
+        self.assertEqual(notes, [f"note: {other.root}: no handoffs"])
+
+    def test_everything_keeps_a_handoff_whose_folder_moved_when_its_directory_is_not_shared(self):
+        moved = self.handoff("remember.md", SESSION_A, "/elsewhere/old-name-of-this-project")
+        cfg = self.config(f"\n## Project roots\n- {self.repo.root}\n")
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual([(r[0], r[3]) for r in rows], [(moved, f"root {self.repo.root}")])
+
     def test_everything_without_the_section_says_so_and_falls_back_to_project(self):
         self.handoff("remember.md", SESSION_A)
         self.handoff(f"remember-{SESSION_B}.md", SESSION_B)
