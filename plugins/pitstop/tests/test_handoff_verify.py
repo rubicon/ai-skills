@@ -1223,8 +1223,9 @@ class ClaimDrift(unittest.TestCase):
         self.repo.git("fetch", "-q", "origin")
         self.assertIn("refs moved", self.drift())
 
-    def test_repairing_worktrees_counts_when_their_paths_are_relative(self):
-        # repair rewrites each gitdir file with the content it already has.
+    def test_repairing_worktrees_counts_only_when_git_rewrites_the_gitdir_file(self):
+        # Before git 2.56, repair rewrote each gitdir file with the content it already had; that
+        # rewrite is what drift sees. A git that leaves the file alone moves nothing and shows none.
         self.repo.git("config", "worktree.useRelativePaths", "true")
         linked = self.linked_worktree()
         gitdir = os.path.join(self.repo.root, ".git", "worktrees", os.path.basename(linked), "gitdir")
@@ -1232,8 +1233,13 @@ class ClaimDrift(unittest.TestCase):
             if os.path.isabs(fh.read().strip()):
                 self.skipTest("this git writes absolute worktree paths")
         self.write_quiet_handoff()
+        before = os.lstat(gitdir)
         self.repo.git("worktree", "repair")
-        self.assertIn("refs moved", self.drift())
+        after = os.lstat(gitdir)
+        if (after.st_ino, after.st_mtime_ns) == (before.st_ino, before.st_mtime_ns):
+            self.assertEqual(self.drift(), "none")
+        else:
+            self.assertIn("refs moved", self.drift())
 
     def test_a_switch_inside_a_linked_worktree_is_counted_with_reflogs_turned_off(self):
         # Only the linked worktree's own HEAD is rewritten; on reftable its stack records the switch.
