@@ -52,7 +52,8 @@ Usage:  handoff-verify.py [--root DIR] [--session ID] [HANDOFF]   (default: .rem
                 value the ref has, git bisect start then reset, git remote set-head --auto that
                 changes nothing, a fetch that creates refs/remotes/<name>/HEAD, a fetch when
                 remote.<name>.followRemoteHEAD is "always", git worktree repair when
-                worktree.useRelativePaths is true, a maintenance prefetch that writes
+                worktree.useRelativePaths is true (seen through git 2.55; the 2.56 runner in CI
+                shows none), a maintenance prefetch that writes
                 refs/prefetch (the first in a repo, and on the reftable backend a later one that
                 adds a ref there), and, on reftable, an up-to-date pull or merge whenever
                 ORIG_HEAD is absent or differs from HEAD. Not seen: removing the last linked
