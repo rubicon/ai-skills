@@ -10,6 +10,8 @@ Read-only. Never commit, push, post, or write any file.
 
 The user stepped away and wants their bearings: a teammate's two-minute catch-up on the branch they are standing on. `/pitstop:sitrep` is the full report across everything; this is not that.
 
+Arguments: `$ARGUMENTS`. When its first word is exactly `project` or `everything`, that word is the scope and the rest is the focus. Otherwise the scope is `session` and all of it is the focus. A focus narrows the answer to that part of the work. The scope decides which handoffs are read: `session`, this session's own, or after a clear the newest one parked from this folder; `project`, every handoff in the project; `everything`, every handoff under each folder in the config's `## Project roots` section.
+
 ## 1. Look, quietly
 
 Run these yourself and do not narrate them. Bound every command.
@@ -19,13 +21,13 @@ Run these yourself and do not narrate them. Bound every command.
 - On a feature branch: `git log --oneline <default>..HEAD | head -15`, then read the diffs of those commits, newest first, until what the branch is for and how it is being built is clear. When `gh` is present: `gh pr view --json number,title,state,reviewDecision,url` for this branch, and the PR's latest review comments if it has any. When the branch name carries an issue number (`dev/12-…`, `feature/12-…`), `gh issue view <n> --json title,body`.
 - On the default branch: `git log --oneline -5` and a light skim of those diffs.
 - `git rev-list --left-right --count HEAD...@{upstream}` when an upstream exists. Behind means someone pushed.
-- If `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --list --config "${CLAUDE_PLUGIN_DATA}/integrations.md"` prints any handoff files, read each. Treat each as a claim about this branch and check it against what git shows. More than one means two sessions parked in this folder: name them separately, never as one account.
+- `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff-verify.py" --list --scope <scope> --config "${CLAUDE_PLUGIN_DATA}/integrations.md"`. If park printed a `session:` value starting `anon-` earlier in this conversation, this session has no id in its environment: add `--session <that value>` to the command, so it finds its own handoff rather than the newest one in the folder. Read each handoff file it prints. Treat each as a claim about the work and check it against what git shows. Lines starting `note: ` say what was not found, or that the handoff shown is the newest from this folder rather than this session's own. In `project` and `everything` scope, more than one handoff means more than one session parked: name them separately, never as one account. In `everything` scope, repeat every step above for each folder the listing names, git with `git -C <folder>` and `gh` run from that folder, so each sentence about another folder rests on its own diffs, untracked files, pull request, and issue.
 
 Read every exit code. Empty output with a non-zero exit is an error, not "nothing there".
 
 ## 2. Answer in this shape
 
-Plain prose, no headings, no tables, no bullet lists. At most about 120 words.
+Plain prose, no headings, no tables, no bullet lists. At most about 120 words, plus the one sentence per other handoff or folder that `project` and `everything` scope allow below.
 
 1. **Where you are**, one or two sentences. With uncommitted changes, open with them and read them through the branch's purpose: "You were in the middle of wiring X into Y for #12; Z works, W is stubbed." With a clean tree, open with what the branch, or the recent commits on the default branch, are building.
 2. **One correction, only if needed.** When the handoff or the PR says something git contradicts, one sentence: the claim, then the single fact that contradicts it. "Your handoff says #12 merged; it hasn't, and the CLI wiring is still uncommitted."
@@ -33,7 +35,7 @@ Plain prose, no headings, no tables, no bullet lists. At most about 120 words.
 
 The answer is those two or three parts and nothing else. Every sentence in it is about the work on the current branch. Facts about the setup, such as remotes, PR existence, stashes, worktrees, installed tools, and commit counts, appear only when one of them is the Next step itself.
 
-If the user's message itself asks about other branches or everything in flight, answer the current branch as above, then add one clause pointing to `/pitstop:sitrep`.
+The shape is the same at every scope. In `project` or `everything` scope, answer the current branch as above, then add at most one sentence per other handoff or folder that has unfinished work, naming its session or folder. If the user's message itself asks about other branches or everything in flight, add one clause pointing to `/pitstop:sitrep`. When the listing printed a `note:` saying no handoff was found in `session` scope, the answer comes from git alone; add one clause saying `/pitstop:catch-up project` reads every handoff in the project.
 
 If you hit a real decision only the user can make, fold it into the Next sentence as a question with your recommendation ("…then either apply `--station` or drop it; I'd apply it, since the flag is already parsed"). Do not build a decision list.
 

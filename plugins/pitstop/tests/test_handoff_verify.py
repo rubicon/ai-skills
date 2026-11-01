@@ -503,7 +503,7 @@ class HandoffOwnership(unittest.TestCase):
         self.repo.write(".remember/remember-bbbbbbbb.md", f"# Handoff\nSession: {SESSION_B}\n")
         self.repo.write(".remember/remember-notes.md", "my own notes, not a handoff\n")
         self.repo.write(".remember/journal.md", "not a handoff\n")
-        rc, lines, err = run_flag(self.repo.root, "--list")
+        rc, lines, err = run_flag(self.repo.root, "--list", None, None, "--scope", "project")
         self.assertEqual(rc, 0, err)
         by_name = {os.path.basename(l.split(" | ")[0]): l.split(" | ") for l in lines}
         self.assertEqual(sorted(by_name), ["remember-bbbbbbbb.md", "remember.md"])
@@ -512,7 +512,7 @@ class HandoffOwnership(unittest.TestCase):
         self.assertRegex(by_name["remember.md"][2], r"^\d+ min$")
 
     def test_list_with_no_handoff_prints_nothing_and_exits_0(self):
-        rc, lines, err = run_flag(self.repo.root, "--list")
+        rc, lines, err = run_flag(self.repo.root, "--list", None, None, "--scope", "project")
         self.assertEqual((rc, lines), (0, []))
 
     def test_the_verifier_accepts_a_sibling_that_names_the_other_sessions_draft(self):
@@ -1406,7 +1406,8 @@ class HandoffStampCheck(unittest.TestCase):
         return r.returncode, r.stdout, r.stderr
 
     def test_a_handoff_carrying_the_expected_session_passes(self):
-        rc, out, err = self.verify(f"# Handoff\nSession: {SESSION_B}\n\n## State\n", "--session", SESSION_B)
+        rc, out, err = self.verify(f"# Handoff\nSession: {SESSION_B}\nFolder: {self.repo.root}\n\n## State\n",
+                                   "--session", SESSION_B)
         self.assertEqual(rc, 0, out + err)
 
     def test_a_handoff_with_no_session_line_fails_and_says_so(self):
@@ -1426,7 +1427,7 @@ class HandoffStampCheck(unittest.TestCase):
         self.assertEqual(rc, 0, out + err)
 
     def test_root_and_session_can_come_in_either_order(self):
-        text = f"# Handoff\nSession: {SESSION_B}\n"
+        text = f"# Handoff\nSession: {SESSION_B}\nFolder: {self.repo.root}\n"
         for flags in (["--root", self.repo.root, "--session", SESSION_B],
                       ["--session", SESSION_B, "--root", self.repo.root]):
             rc, out, err = self.verify(text, *flags)
@@ -1434,6 +1435,277 @@ class HandoffStampCheck(unittest.TestCase):
 
     def test_session_flag_with_no_value_exits_2(self):
         r = subprocess.run([sys.executable, SCRIPT, "--session"], capture_output=True, text=True, cwd="/")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("usage", r.stderr)
+
+
+class HandoffScope(unittest.TestCase):
+    """sitrep and catch-up read this session's handoff by default, not every handoff in the folder.
+    park stamps the folder it ran from, so a session that came back under a new id after a clear
+    still finds the handoff it parked."""
+
+    def setUp(self):
+        self.repo = Repo()
+        self.addCleanup(self.repo.tmp.cleanup)
+        self.remember = os.path.join(self.repo.root, ".remember")
+
+    def handoff(self, name, session, folder=None, minutes_ago=0, repo=None):
+        repo = repo or self.repo
+        text = f"# Handoff\nSession: {session}\n" + (f"Folder: {folder}\n" if folder else "") + "\n## State\n"
+        repo.write(f".remember/{name}", text)
+        path = os.path.join(repo.root, ".remember", name)
+        stamp = time.time() - minutes_ago * 60
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def listing(self, *extra, session=None, cwd=None):
+        rc, lines, err = run_flag(cwd or self.repo.root, "--list", session, None, *extra)
+        self.assertEqual(rc, 0, err)
+        notes = [l for l in lines if l.startswith("note: ")]
+        rows = [l.split(" | ") for l in lines if not l.startswith("note: ")]
+        return rows, notes
+
+    def claim(self, session, cwd=None):
+        rc, lines, err = run_flag(cwd or self.repo.root, "--claim", session)
+        self.assertEqual(rc, 0, err)
+        return dict(l.split(": ", 1) for l in lines)
+
+    # --claim stamps the folder
+
+    def test_claim_stamps_the_folder_next_to_the_session_and_prints_it(self):
+        d = self.claim(SESSION_A)
+        self.assertEqual(d["folder"], self.repo.root)
+        self.assertEqual(handoff_text(d["write"]).splitlines()[:3],
+                         ["# Handoff", f"Session: {SESSION_A}", f"Folder: {self.repo.root}"])
+
+    def test_claim_from_a_subdirectory_stamps_the_checkout_root(self):
+        sub = os.path.join(self.repo.root, "src", "deep")
+        os.makedirs(sub)
+        d = self.claim(SESSION_A, cwd=sub)
+        self.assertEqual(d["folder"], self.repo.root)
+
+    def test_claim_in_a_linked_worktree_stamps_the_worktree_root(self):
+        self.repo.commit("a.txt", "a\n")
+        wt = os.path.join(self.repo.root, "worktrees", "dev-7-feature")
+        self.repo.git("worktree", "add", "-q", wt, "-b", "dev/7-feature")
+        d = self.claim(SESSION_A, cwd=wt)
+        self.assertEqual(d["folder"], wt)
+        self.assertIn(f"Folder: {wt}", handoff_text(d["write"]))
+
+    def test_claim_outside_git_stamps_the_working_directory(self):
+        repo = Repo(git=False)
+        self.addCleanup(repo.tmp.cleanup)
+        d = self.claim(SESSION_A, cwd=repo.root)
+        self.assertEqual(d["folder"], repo.root)
+
+    def test_verify_with_session_fails_a_handoff_that_lost_its_folder_line(self):
+        path = self.handoff("remember.md", SESSION_A)
+        r = subprocess.run([sys.executable, SCRIPT, "--session", SESSION_A, path],
+                           capture_output=True, text=True, cwd="/")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("FOLDER-MISSING line 0", r.stdout)
+
+    # --list --scope session (the default)
+
+    def test_session_scope_is_the_default(self):
+        self.handoff("remember.md", SESSION_B, self.repo.root)
+        mine = self.handoff(f"remember-{SESSION_A}.md", SESSION_A, self.repo.root, minutes_ago=5)
+        rows, notes = self.listing(session=SESSION_A)
+        self.assertEqual([r[0] for r in rows], [mine])
+
+    def test_own_handoff_beats_a_newer_one_from_the_same_folder(self):
+        self.handoff("remember.md", SESSION_B, self.repo.root)
+        mine = self.handoff(f"remember-{SESSION_A}.md", SESSION_A, self.repo.root, minutes_ago=60)
+        rows, notes = self.listing("--scope", "session", session=SESSION_A)
+        self.assertEqual([r[0] for r in rows], [mine])
+        self.assertEqual(rows[0][1], f"session {SESSION_A}")
+        self.assertEqual(notes, [])
+
+    def test_own_handoff_with_no_folder_line_is_still_found(self):
+        mine = self.handoff("remember.md", SESSION_A)
+        rows, notes = self.listing("--scope", "session", session=SESSION_A)
+        self.assertEqual([r[0] for r in rows], [mine])
+
+    def test_the_newest_of_this_sessions_own_handoffs_is_the_one_returned(self):
+        self.handoff("remember.md", SESSION_A, self.repo.root, minutes_ago=30)
+        newer = self.handoff(f"remember-{SESSION_A}.md", SESSION_A, self.repo.root, minutes_ago=2)
+        rows, notes = self.listing("--scope", "session", session=SESSION_A)
+        self.assertEqual([r[0] for r in rows], [newer])
+
+    def test_after_park_and_a_new_session_id_the_parked_handoff_is_found_by_folder(self):
+        parked = self.claim(SESSION_A)["write"]
+        rows, notes = self.listing("--scope", "session", session=SESSION_B)
+        self.assertEqual([r[0] for r in rows], [parked])
+        self.assertEqual(len(notes), 1)
+        self.assertIn("no handoff from this session", notes[0])
+        self.assertIn(self.repo.root, notes[0])
+
+    def test_the_newest_handoff_from_this_folder_wins_the_fallback(self):
+        self.handoff("remember.md", SESSION_A, self.repo.root, minutes_ago=90)
+        newest = self.handoff("remember-cccccccc.md", "cccccccc", self.repo.root, minutes_ago=3)
+        rows, notes = self.listing("--scope", "session", session=SESSION_B)
+        self.assertEqual([r[0] for r in rows], [newest])
+
+    def test_the_fallback_matches_from_a_subdirectory_of_the_checkout(self):
+        parked = self.claim(SESSION_A)["write"]
+        sub = os.path.join(self.repo.root, "docs")
+        os.makedirs(sub)
+        rows, notes = self.listing("--scope", "session", session=SESSION_B, cwd=sub)
+        self.assertEqual([r[0] for r in rows], [parked])
+
+    def test_a_handoff_from_another_folder_is_not_shown(self):
+        self.handoff("remember.md", SESSION_A, "/elsewhere/other-checkout")
+        rows, notes = self.listing("--scope", "session", session=SESSION_B)
+        self.assertEqual(rows, [])
+
+    def test_another_sessions_handoff_with_no_folder_line_is_not_shown(self):
+        self.handoff("remember.md", SESSION_A)
+        rows, notes = self.listing("--scope", "session", session=SESSION_B)
+        self.assertEqual(rows, [])
+
+    def test_nothing_found_says_so_in_one_line_that_names_the_project_scope(self):
+        self.handoff("remember.md", SESSION_A)
+        rows, notes = self.listing("--scope", "session", session=SESSION_B)
+        self.assertEqual(rows, [])
+        self.assertEqual(len(notes), 1)
+        self.assertIn("--scope project", notes[0])
+        self.assertIn("1 handoff", notes[0])
+
+    def test_a_session_flag_identifies_a_session_with_no_id_in_its_environment(self):
+        self.handoff("remember.md", SESSION_B, self.repo.root)
+        mine = self.handoff("remember-anon-0a1b2c3d.md", "anon-0a1b2c3d", self.repo.root, minutes_ago=40)
+        rows, notes = self.listing("--scope", "session", "--session", "anon-0a1b2c3d")
+        self.assertEqual([r[0] for r in rows], [mine])
+
+    # --scope project
+
+    def test_project_scope_lists_every_handoff(self):
+        self.handoff("remember.md", SESSION_A)
+        self.handoff(f"remember-{SESSION_B}.md", SESSION_B, "/elsewhere/other-checkout")
+        rows, notes = self.listing("--scope", "project", session=SESSION_A)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(notes, [])
+
+    # --scope everything
+
+    def config(self, body):
+        cfg = os.path.join(self.repo.root, "integrations.md")
+        with open(cfg, "w") as fh:
+            fh.write("---\nhandoff_path: .remember/remember.md\n---\n## Handoff\nmode: default\n" + body)
+        return cfg
+
+    def test_everything_lists_each_project_root_and_labels_every_line(self):
+        other = Repo()
+        self.addCleanup(other.tmp.cleanup)
+        here = self.handoff("remember.md", SESSION_A)
+        there = self.handoff("remember.md", SESSION_B, repo=other)
+        cfg = self.config(f"\n## Project roots\n- {self.repo.root}\n- {other.root}\n")
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual(sorted((r[0], r[3]) for r in rows),
+                         sorted([(here, f"root {self.repo.root}"), (there, f"root {other.root}")]))
+        self.assertEqual(notes, [])
+
+    def test_everything_lists_a_shared_handoff_directory_once_labelled_by_each_files_folder(self):
+        other = Repo()
+        self.addCleanup(other.tmp.cleanup)
+        shared = os.path.join(self.repo.root, "shared-handoffs")
+        os.makedirs(shared)
+        here = os.path.join(shared, "remember.md")
+        there = os.path.join(shared, f"remember-{SESSION_B}.md")
+        with open(here, "w") as fh:
+            fh.write(f"# Handoff\nSession: {SESSION_A}\nFolder: {self.repo.root}\n")
+        with open(there, "w") as fh:
+            fh.write(f"# Handoff\nSession: {SESSION_B}\nFolder: {other.root}\n")
+        cfg = os.path.join(self.repo.root, "integrations.md")
+        with open(cfg, "w") as fh:
+            fh.write(f"---\nhandoff_path: {here}\n---\n## Project roots\n- {self.repo.root}\n- {other.root}\n")
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual(sorted((r[0], r[3]) for r in rows),
+                         sorted([(here, f"root {self.repo.root}"), (there, f"root {other.root}")]))
+
+    def shared_setup(self, stamps):
+        """A handoff directory shared by every root through an absolute handoff_path, holding one
+        handoff per (name, folder) in stamps, and a config listing this repo and one other."""
+        other = Repo()
+        self.addCleanup(other.tmp.cleanup)
+        shared = os.path.join(self.repo.root, "shared-handoffs")
+        os.makedirs(shared)
+        canonical = os.path.join(shared, "remember.md")
+        paths = {}
+        for name, folder in stamps(other):
+            paths[name] = os.path.join(shared, name)
+            with open(paths[name], "w") as fh:
+                fh.write(f"# Handoff\nSession: {name}\nFolder: {folder}\n")
+        cfg = os.path.join(self.repo.root, "integrations.md")
+        with open(cfg, "w") as fh:
+            fh.write(f"---\nhandoff_path: {canonical}\n---\n## Project roots\n- {self.repo.root}\n- {other.root}\n")
+        return other, paths, cfg
+
+    def test_everything_skips_a_shared_handoff_from_a_project_that_is_not_listed(self):
+        other, paths, cfg = self.shared_setup(lambda other: [
+            ("remember.md", self.repo.root), ("remember-x.md", other.root),
+            ("remember-y.md", "/elsewhere/unlisted-project")])
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual(sorted(r[0] for r in rows), sorted([paths["remember.md"], paths["remember-x.md"]]))
+
+    def test_everything_notes_a_listed_root_with_no_handoff_in_a_shared_directory(self):
+        other, paths, cfg = self.shared_setup(lambda other: [("remember.md", self.repo.root)])
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual([(r[0], r[3]) for r in rows], [(paths["remember.md"], f"root {self.repo.root}")])
+        self.assertEqual(notes, [f"note: {other.root}: no handoffs"])
+
+    def test_everything_keeps_a_handoff_whose_folder_moved_when_its_directory_is_not_shared(self):
+        moved = self.handoff("remember.md", SESSION_A, "/elsewhere/old-name-of-this-project")
+        cfg = self.config(f"\n## Project roots\n- {self.repo.root}\n")
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual([(r[0], r[3]) for r in rows], [(moved, f"root {self.repo.root}")])
+
+    def test_everything_without_the_section_says_so_and_falls_back_to_project(self):
+        self.handoff("remember.md", SESSION_A)
+        self.handoff(f"remember-{SESSION_B}.md", SESSION_B)
+        cfg = self.config("\n## Journal\nmode: default\n")
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(notes), 1)
+        self.assertIn("Project roots", notes[0])
+        self.assertIn("project", notes[0])
+
+    def test_everything_with_an_empty_section_says_so_and_falls_back_to_project(self):
+        self.handoff("remember.md", SESSION_A)
+        cfg = self.config("\n## Project roots\n\n## Journal\nmode: default\n")
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_B)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(notes), 1)
+        self.assertIn("Project roots", notes[0])
+
+    def test_everything_with_no_config_file_falls_back_to_project(self):
+        self.handoff("remember.md", SESSION_A)
+        rows, notes = self.listing("--scope", "everything", "--config",
+                                   os.path.join(self.repo.root, "absent.md"), session=SESSION_B)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(notes), 1)
+
+    def test_everything_reports_a_missing_or_relative_root_and_a_root_with_no_handoffs(self):
+        empty = Repo()
+        self.addCleanup(empty.tmp.cleanup)
+        missing = os.path.join(self.repo.root, "no-such-project")
+        cfg = self.config(f"\n## Project roots\n- {missing}\n- relative/project\n- {empty.root}\n")
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual(rows, [])
+        self.assertEqual(len(notes), 3, notes)
+        self.assertTrue(any(missing in n for n in notes), notes)
+        self.assertTrue(any("relative/project" in n for n in notes), notes)
+        self.assertTrue(any(empty.root in n and "no handoffs" in n for n in notes), notes)
+
+    def test_everything_expands_a_home_relative_root(self):
+        cfg = self.config("\n## Project roots\n- ~/no-such-pitstop-project-for-tests\n")
+        rows, notes = self.listing("--scope", "everything", "--config", cfg, session=SESSION_A)
+        self.assertEqual(len(notes), 1)
+        self.assertIn(os.path.expanduser("~/no-such-pitstop-project-for-tests"), notes[0])
+
+    def test_an_unknown_scope_exits_2(self):
+        r = subprocess.run([sys.executable, SCRIPT, "--list", "--scope", "galaxy"],
+                           capture_output=True, text=True, cwd=self.repo.root)
         self.assertEqual(r.returncode, 2)
         self.assertIn("usage", r.stderr)
 
@@ -1491,7 +1763,8 @@ class HandoffPrune(unittest.TestCase):
         rc, out, err = self.prune()
         self.assertEqual((rc, out), (0, []))
         self.assertTrue(self.exists("pruned/remember-old.md"))
-        r = subprocess.run([sys.executable, SCRIPT, "--list"], capture_output=True, text=True, cwd=self.repo.root)
+        r = subprocess.run([sys.executable, SCRIPT, "--list", "--scope", "project"],
+                           capture_output=True, text=True, cwd=self.repo.root)
         self.assertEqual(r.stdout, "")
 
     def test_days_sets_the_cutoff(self):
