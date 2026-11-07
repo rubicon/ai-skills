@@ -12,17 +12,18 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column">
-        {/* A keyed Box is the hover scope: the card below shows while the pointer is over it. */}
+        {/* The pill's tint and outline are the context pill's in Token Weather Usage. A keyed Box is the hover scope: the card below shows while the pointer is over it. */}
         <Box
           key="session-id"
           flexDirection="row"
           alignItems="center"
           alignSelf="flex-start"
           flexShrink={0}
-          paddingX={1}
+          paddingX={0}
           paddingY={0}
           borderStyle={isDesktop ? 'round' : undefined}
-          borderColor={isDesktop ? '#ffffff' : undefined}
+          borderColor={isDesktop ? 'rgba(47,104,192,0.28)' : undefined}
+          backgroundColor={isDesktop ? 'rgba(47,104,192,0.10)' : undefined}
         >
           <Button
             key="copy"
