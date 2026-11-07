@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.3.0](https://github.com/rubicon/ai-skills/compare/v2.2.1...v2.3.0) (2026-11-07)
+
+
+### Features
+
+* add session-id-mod plugin ([#196](https://github.com/rubicon/ai-skills/issues/196)) ([1c86802](https://github.com/rubicon/ai-skills/commit/1c86802bbb09726c119a0923987240204b32df2e)), closes [#195](https://github.com/rubicon/ai-skills/issues/195)
+* **pitstop:** scope sitrep and catch-up to the current session by default ([#192](https://github.com/rubicon/ai-skills/issues/192)) ([b60fe73](https://github.com/rubicon/ai-skills/commit/b60fe7327806de5de413d24b5f9993707335375c)), closes [#191](https://github.com/rubicon/ai-skills/issues/191)
+* **session-messaging:** output session-whoami address in a copyable code block ([#186](https://github.com/rubicon/ai-skills/issues/186)) ([683ae6f](https://github.com/rubicon/ai-skills/commit/683ae6fd09ceb0e6ac9bc52c837b86a43f3eb56f)), closes [#185](https://github.com/rubicon/ai-skills/issues/185)
+
 ## [2.2.1](https://github.com/rubicon/ai-skills/compare/v2.2.0...v2.2.1) (2026-10-19)
 
 
