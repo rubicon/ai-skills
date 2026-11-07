@@ -68,6 +68,7 @@ Install from this repository's marketplace (`rubicon`):
 | [loadout](plugins/loadout/README.md) | Audit which plugins and skills a project loads, recommend a per-project set, apply it after approval, and verify it from fresh sessions |
 | [outbound-review-gate](plugins/outbound-review-gate/README.md) | Deny posts to third-party repos unless a review receipt exists for the exact text |
 | [right-stuff-guard](plugins/right-stuff-guard/README.md) | A PreToolUse hook that denies an AskUserQuestion call whose option labels break the right-stuff marker rules, so the model fixes them and asks again |
+| [session-id-mod](plugins/session-id-mod/README.md) | A Claude Code mod that draws a copy icon above the prompt: click to copy the session ID, hover to read it |
 | [rubicon-marketing-board](https://github.com/rubicon/rubicon-marketing-board) | A nine-seat marketing advisory board for Claude Code (external source) |
 
 

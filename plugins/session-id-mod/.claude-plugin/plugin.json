@@ -1,0 +1,8 @@
+{
+  "name": "session-id-mod",
+  "version": "0.1.0",
+  "description": "A copy icon above the prompt: click to copy this session's ID, hover to read it.",
+  "author": { "name": "Dax Davis" },
+  "homepage": "https://github.com/rubicon/ai-skills",
+  "license": "MIT"
+}
