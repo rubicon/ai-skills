@@ -15,8 +15,9 @@ Requires a Claude Code release that runs mods (2.1.294 or later). Start a new se
 
 ## Behavior and limits
 
-- The ID appears in a hover-reveal text beside the icon. Mods have no native tooltip, so on a terminal the hover works only where the terminal reports mouse movement, and the icon row reflows slightly when the text appears.
-- The icon is one text character, so its size follows the surface's font and is not configurable.
+- The icon sits in a rounded pill above the prompt. Hovering over the pill shows a card above it with the session ID. The card floats, so showing it moves nothing else.
+- Mods have no native tooltip, so the card is a hover-revealed box. On a terminal the hover works only where the terminal reports mouse movement.
+- The icon is a text glyph drawn at the surface's largest text step. The terminal has a single text size, so it draws the icon at normal size there.
 - The mod reads the session ID and writes to the clipboard through the mod API. It reads no files, runs no programs and uses no network.
 
 ## Tests

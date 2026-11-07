@@ -8,22 +8,47 @@ export const register: Register = on => {
     // Read at every draw: /clear and resume go on under another id.
     const id = await $.session.id()
     const { Box, Button, Text } = $.ui.resolve(e)
+    const isDesktop = e.surface === 'desktop'
 
     return (
       <Box flexDirection="column">
-        {/* The keyed Box is the hover scope: the id is drawn only while the pointer is over it. */}
-        <Box key="session-id" flexDirection="row" gap={1}>
+        {/* A keyed Box is the hover scope: the card below shows while the pointer is over it. */}
+        <Box
+          key="session-id"
+          flexDirection="row"
+          alignItems="center"
+          flexShrink={0}
+          paddingX={1}
+          paddingY={0}
+          borderStyle={isDesktop ? 'round' : undefined}
+          borderColor={isDesktop ? 'subtle' : undefined}
+        >
           <Button
             key="copy"
-            label="⧉"
             plain
             onPress={async press => {
               const { isCopied, reason } = await $.ui.copy({ text: id, surface: press.surface })
               $.ui.toast(isCopied ? 'Session ID copied' : `Could not copy the session ID (${reason})`)
             }}
-          />
-          <Box display="none" hover={{ display: 'flex' }}>
-            <Text dimColor>{id} · click to copy</Text>
+          >
+            <Text size="title">⧉</Text>
+          </Button>
+          {/* No key: a keyed Box scopes its own hover, and a hidden one is never hovered. Absolute, so showing it moves nothing. */}
+          <Box
+            position="absolute"
+            bottom={1}
+            left={0}
+            display="none"
+            hover={{ display: 'flex' }}
+            flexDirection="column"
+            paddingX={1}
+            paddingY={0}
+            borderStyle="round"
+            borderColor="subtle"
+            backgroundColor="background"
+          >
+            <Text>{id}</Text>
+            <Text dimColor>Click the icon to copy</Text>
           </Box>
         </Box>
         {below}
