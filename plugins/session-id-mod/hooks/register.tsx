@@ -17,11 +17,12 @@ export const register: Register = on => {
           key="session-id"
           flexDirection="row"
           alignItems="center"
+          alignSelf="flex-start"
           flexShrink={0}
           paddingX={1}
           paddingY={0}
           borderStyle={isDesktop ? 'round' : undefined}
-          borderColor={isDesktop ? 'subtle' : undefined}
+          borderColor={isDesktop ? '#ffffff' : undefined}
         >
           <Button
             key="copy"
@@ -31,7 +32,7 @@ export const register: Register = on => {
               $.ui.toast(isCopied ? 'Session ID copied' : `Could not copy the session ID (${reason})`)
             }}
           >
-            <Text size="title">⧉</Text>
+            <Text size="title" color="#ffffff">#</Text>
           </Button>
           {/* No key: a keyed Box scopes its own hover, and a hidden one is never hovered. Absolute, so showing it moves nothing. */}
           <Box
