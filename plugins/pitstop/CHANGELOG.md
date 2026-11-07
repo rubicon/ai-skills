@@ -5,6 +5,13 @@ All notable changes to this plugin are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [0.4.0](https://github.com/rubicon/ai-skills/compare/pitstop-v0.3.3...pitstop-v0.4.0) (2026-11-07)
+
+
+### Features
+
+* **pitstop:** scope sitrep and catch-up to the current session by default ([#192](https://github.com/rubicon/ai-skills/issues/192)) ([b60fe73](https://github.com/rubicon/ai-skills/commit/b60fe7327806de5de413d24b5f9993707335375c)), closes [#191](https://github.com/rubicon/ai-skills/issues/191)
+
 ## [0.3.3](https://github.com/rubicon/ai-skills/compare/pitstop-v0.3.2...pitstop-v0.3.3) (2026-10-14)
 
 
