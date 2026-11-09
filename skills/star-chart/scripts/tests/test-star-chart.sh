@@ -233,6 +233,40 @@ printf '## Unstar\n\n| Repo | Reason |\n|---|---|\n| only-one-cell |\n' >"$TMP/p
 jq -R -s -L "$JQ" -f "$JQ/parse.jq" "$TMP/plan-broken.md" >"$TMP/parse-broken.out" 2>&1
 exits "a malformed row is an error" 5 $? "$TMP/parse-broken.out"
 contains "the error quotes the row" 'only-one-cell' "$TMP/parse-broken.out"
+# The Private cell decides who can see a List, so only an explicit yes or no is read.
+create_private() { # <cell text>
+  printf '## Lists to create\n\n| List | Description | Private | Reason |\n|---|---|---|---|\n| Research | Papers | %s | Asked for |\n' "$1" >"$TMP/plan-private.md"
+  jq -R -s -L "$JQ" -f "$JQ/parse.jq" "$TMP/plan-private.md" >"$TMP/parse-private.out" 2>&1
+}
+rename_private() { # <cell text>
+  printf '## List renames\n\n| List | To | Description | Private | Reason |\n|---|---|---|---|---|\n| Old | New |  | %s | Clearer |\n' "$1" >"$TMP/plan-private.md"
+  jq -R -s -L "$JQ" -f "$JQ/parse.jq" "$TMP/plan-private.md" >"$TMP/parse-private.out" 2>&1
+}
+create_private "private"
+exits "a new List with an unrecognized Private cell is an error" 5 $? "$TMP/parse-private.out"
+contains "the error names the section and the value" 'under "Lists to create" must be yes or no, not "private"' "$TMP/parse-private.out"
+contains "the error quotes the row" '| Research | Papers | private | Asked for |' "$TMP/parse-private.out"
+create_private ""
+exits "a new List with an empty Private cell is an error" 5 $? "$TMP/parse-private.out"
+create_private "yes please"
+exits "a new List with a Private cell of more than an answer is an error" 5 $? "$TMP/parse-private.out"
+rename_private "public"
+exits "a rename with an unrecognized Private cell is an error" 5 $? "$TMP/parse-private.out"
+contains "the rename error names its section" 'under "List renames" must be yes or no, not "public"' "$TMP/parse-private.out"
+for answer in yes Yes Y TRUE true; do
+  create_private "$answer"
+  check "a Private cell of $answer makes a new List private" '.lists_to_create[0].private == true' "$TMP/parse-private.out"
+done
+for answer in no No N FALSE false; do
+  create_private "$answer"
+  check "a Private cell of $answer makes a new List public" '.lists_to_create[0].private == false' "$TMP/parse-private.out"
+done
+rename_private "no"
+check "a rename can say public" '.renames[0].private == false' "$TMP/parse-private.out"
+rename_private "yes"
+check "a rename can say private" '.renames[0].private == true' "$TMP/parse-private.out"
+rename_private ""
+check "a rename with an empty Private cell keeps the List's visibility" '.renames[0].private == null' "$TMP/parse-private.out"
 
 echo "# plan.sh"
 D=$(make_data_dir plan-sh)

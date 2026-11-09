@@ -4,7 +4,8 @@
 #
 # Reads only the tables render.jq writes. The first row under each heading is
 # the column header and is skipped, as is the |---| separator. A row with the
-# wrong number of cells stops with an error quoting the row.
+# wrong number of cells, or a Private cell that is not yes or no, stops with an
+# error quoting the row.
 include "common";
 
 def cells:
@@ -17,7 +18,14 @@ def need($c; $n; $section; $line):
   else . end;
 
 def names: sc_split_names;
-def yes: ascii_downcase | test("^(yes|y|true)$");
+
+# The Private cell decides who can see a List, so only an explicit answer counts:
+# anything else stops with an error rather than being read as public.
+def private($cell; $section; $line):
+  ($cell | ascii_downcase) as $answer
+  | if ($answer | IN("yes", "y", "true")) then true
+    elif ($answer | IN("no", "n", "false")) then false
+    else error("plan.md: the Private cell under \"\($section)\" must be yes or no, not \"\($cell)\": \($line)") end;
 
 split("\n") as $lines
 | ([$lines[] | select(startswith("<!-- star-chart plan"))] | first // "") as $meta
@@ -33,12 +41,12 @@ split("\n") as $lines
       ($line | cells) as $c
       | if .section == "lists to create" then
           need($c; 4; "Lists to create"; $line)
-          | .out.lists_to_create += [{name: $c[0], description: $c[1], private: ($c[2] | yes), reason: $c[3]}]
+          | .out.lists_to_create += [{name: $c[0], description: $c[1], private: private($c[2]; "Lists to create"; $line), reason: $c[3]}]
         elif .section == "list renames" then
           need($c; 5; "List renames"; $line)
           | .out.renames += [{list: $c[0], to: $c[1],
               description: (if $c[2] == "" then null else $c[2] end),
-              private: (if $c[3] == "" then null else ($c[3] | yes) end), reason: $c[4]}]
+              private: (if $c[3] == "" then null else private($c[3]; "List renames"; $line) end), reason: $c[4]}]
         elif .section == "list merges" then
           need($c; 3; "List merges"; $line)
           | .out.merges += [{lists: ($c[0] | names), into: $c[1], reason: $c[2]}]
