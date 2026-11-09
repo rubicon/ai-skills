@@ -76,6 +76,11 @@
       "name": "right-stuff-guard",
       "source": "./plugins/right-stuff-guard",
       "description": "Deny an AskUserQuestion call whose option labels break the right-stuff marker rules, so the model fixes them and asks again."
+    },
+    {
+      "name": "session-id-mod",
+      "source": "./plugins/session-id-mod",
+      "description": "A copy icon above the prompt: click to copy this session's ID, hover to read it."
     }
   ]
 }
