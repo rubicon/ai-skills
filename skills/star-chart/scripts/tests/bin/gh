@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# gh: a stand-in for the GitHub CLI, used only by test-star-chart.sh to drive
+# the writing scripts end to end without a network. Never reaches GitHub.
+# It keeps List state in $STUB_DIR/lists.json and changes it the way GitHub
+# would for each successful write, so later reads see earlier writes.
+#
+# Reads from $STUB_DIR:
+#   lists.json   Lists with items, in the shape sc_fetch_lists prints
+#   starred.json raw star+json rows for a full read of user/starred; the
+#                moment of that read is written to stars-read-at
+#   recent.json  raw star+json rows for the newest-first protection read
+#   statuses     HTTP status for each write call in turn, one per line;
+#                once used up (or absent), status applies
+#   status       HTTP status for every write call (default: 200)
+#                A status ending in "+" (such as 502+) makes the change and
+#                still answers with that error: a call that landed, though
+#                its answer says otherwise. "200~" makes the change, then the
+#                connection drops mid-answer: 200 headers, a cut-off body,
+#                and gh exits 1.
+#   change-<n>   a jq filter applied to lists.json just before write call n
+#                is answered: someone editing their Lists mid-run
+#   recent-<n>   replaces recent.json just before write call n is answered:
+#                someone starring a repo mid-run
+#   run-<n>      a shell script run just before write call n is answered:
+#                anything else that changes mid-run (a test writes it)
+#   unstarred    repos not starred, one per line (every other repo is);
+#                an unstar adds to it and a star removes from it
+# Appends to $STUB_DIR/calls one line per write: METHOD path variables.
+set -euo pipefail
+: "${STUB_DIR:?STUB_DIR is not set}"
+login=example-user
+lists="$STUB_DIR/lists.json"
+
+if [ "${1:-}" = auth ]; then exit 0; fi
+[ "${1:-}" = api ] || { echo "stub gh: unsupported command: $*" >&2; exit 1; }
+shift
+
+include=0 jq_filter="" method="" path="" input="" list_id=""
+while [ $# -gt 0 ]; do
+  case $1 in
+    -i) include=1 ;;
+    --paginate) ;;
+    --jq) jq_filter=$2; shift ;;
+    -X) method=$2; shift ;;
+    -H) shift ;;
+    --input) input=$2; shift ;;
+    -f) case $2 in id=*) list_id=${2#id=} ;; esac; shift ;;
+    -*) echo "stub gh: unsupported flag: $1" >&2; exit 1 ;;
+    *) path=$1 ;;
+  esac
+  shift
+done
+
+# reply <body> : print the body, filtered through --jq when one was given.
+reply() {
+  if [ -n "$jq_filter" ]; then printf '%s' "$1" | jq -c -r "$jq_filter"; else printf '%s\n' "$1"; fi
+}
+# change_lists <jq filter> [jq args...] : rewrite lists.json.
+change_lists() {
+  local f=$1
+  shift
+  jq "$@" "$f" "$lists" >"$lists.tmp" && mv "$lists.tmp" "$lists"
+}
+
+# A write: any call with a method, or any GraphQL call with a request body.
+if [ -n "$method" ] || [ -n "$input" ]; then
+  vars=""
+  [ -n "$input" ] && vars=$(jq -c '.variables' "$input")
+  printf '%s %s %s\n' "${method:-POST}" "$path" "$vars" >>"$STUB_DIR/calls"
+  n=$(wc -l <"$STUB_DIR/calls" | tr -d ' ')
+  if [ -f "$STUB_DIR/change-$n" ]; then change_lists "$(cat "$STUB_DIR/change-$n")"; fi
+  if [ -f "$STUB_DIR/recent-$n" ]; then cp "$STUB_DIR/recent-$n" "$STUB_DIR/recent.json"; fi
+  if [ -f "$STUB_DIR/run-$n" ]; then bash "$STUB_DIR/run-$n"; fi
+  status=$(cat "$STUB_DIR/status" 2>/dev/null || echo 200)
+  if [ -s "$STUB_DIR/statuses" ]; then
+    status=$(head -n 1 "$STUB_DIR/statuses")
+    tail -n +2 "$STUB_DIR/statuses" >"$STUB_DIR/statuses.tmp" && mv "$STUB_DIR/statuses.tmp" "$STUB_DIR/statuses"
+  fi
+  landed=0 truncated=0
+  case $status in
+    *+) status=${status%+}; landed=1 ;;
+    *~) status=${status%\~}; landed=1; truncated=1 ;;
+  esac
+  if [ "$status" != 200 ] && [ "$landed" = 0 ]; then
+    printf 'HTTP/2.0 %s Refused\r\nX-Ratelimit-Remaining: 4000\r\n\r\n{"message":"Resource not accessible by personal access token"}' "$status"
+    exit 1
+  fi
+  if [ -z "$input" ]; then
+    repo=${path#user/starred/}
+    touch "$STUB_DIR/unstarred"
+    if [ "$method" = DELETE ]; then
+      grep -qxF "$repo" "$STUB_DIR/unstarred" || printf '%s\n' "$repo" >>"$STUB_DIR/unstarred"
+    elif [ "$method" = PUT ]; then
+      grep -vxF "$repo" "$STUB_DIR/unstarred" >"$STUB_DIR/unstarred.tmp" || true
+      mv "$STUB_DIR/unstarred.tmp" "$STUB_DIR/unstarred"
+    fi
+    if [ "$truncated" = 1 ]; then printf 'HTTP/2.0 200 OK\r\n\r\n{"mess'; exit 1; fi
+    if [ "$landed" = 1 ]; then printf 'HTTP/2.0 %s Server Error\r\n\r\n' "$status"; exit 1; fi
+    printf 'HTTP/2.0 204 No Content\r\n\r\n'
+    exit 0
+  fi
+  query=$(jq -r .query "$input")
+  case $query in
+    *createUserList*)
+      id=$(jq -r '"UL_NEW_" + .variables.name' "$input")
+      change_lists '. + [{id: $id, name: $v.name, description: ($v.description // ""), isPrivate: ($v.isPrivate // false), items: []}]' \
+        --arg id "$id" --argjson v "$vars"
+      body=$(jq -c -n --arg id "$id" --argjson v "$vars" '{data: {createUserList: {list: {id: $id, name: $v.name}}}}') ;;
+    *updateUserListsForItem*)
+      change_lists 'map(. as $l | .items |= ([.[] | select(.id != $v.itemId)]
+          + (if ($v.listIds | index([$l.id])) != null then [{id: $v.itemId, nameWithOwner: $v.itemId}] else [] end)))' \
+        --argjson v "$vars"
+      body='{"data":{}}' ;;
+    *updateUserList*)
+      change_lists 'map(if .id == $v.listId then .name = ($v.name // .name) | .description = ($v.description // .description)
+          | .isPrivate = (if $v.isPrivate == null then .isPrivate else $v.isPrivate end) else . end)' --argjson v "$vars"
+      body='{"data":{}}' ;;
+    *deleteUserList*)
+      change_lists 'map(select(.id != $v.listId))' --argjson v "$vars"
+      body='{"data":{}}' ;;
+    *) body='{"data":{}}' ;;
+  esac
+  if [ "$truncated" = 1 ]; then
+    printf 'HTTP/2.0 200 OK\r\n\r\n{"data":'
+    exit 1
+  fi
+  if [ "$landed" = 1 ]; then
+    printf 'HTTP/2.0 %s Server Error\r\n\r\n' "$status"
+    exit 1
+  fi
+  printf 'HTTP/2.0 200 OK\r\n\r\n%s' "$body"
+  exit 0
+fi
+
+case $path in
+  user)
+    if [ "$include" = 1 ]; then
+      printf 'HTTP/2.0 200 OK\r\nX-Oauth-Scopes: repo, user\r\n\r\n{"login":"%s"}' "$login"
+    else
+      reply "{\"login\":\"$login\"}"
+    fi ;;
+  graphql)
+    if [ -n "$list_id" ]; then
+      reply "$(jq -c --arg id "$list_id" '[.[] | select(.id == $id) | .items[]] as $i
+        | {data: {node: {items: {totalCount: ($i | length), nodes: $i, pageInfo: {hasNextPage: false, endCursor: null}}}}}' "$lists")"
+    else
+      stars=0
+      [ -f "$STUB_DIR/starred.json" ] && stars=$(jq length "$STUB_DIR/starred.json")
+      reply "$(jq -c --argjson n "$stars" '{data: {viewer: {starredRepositories: {totalCount: $n},
+        lists: {nodes: map(.items = {nodes: .items, pageInfo: {hasNextPage: false, endCursor: null}})}}}}' "$lists")"
+    fi ;;
+  user/starred/*/*)
+    if [ -f "$STUB_DIR/unstarred" ] && grep -qxF "${path#user/starred/}" "$STUB_DIR/unstarred"; then
+      printf 'HTTP/2.0 404 Not Found\r\n\r\n{"message":"Not Found"}'
+      exit 1
+    fi
+    printf 'HTTP/2.0 204 No Content\r\n\r\n' ;;
+  user/starred\?*sort=created*)
+    if [ -f "$STUB_DIR/recent.json" ]; then reply "$(cat "$STUB_DIR/recent.json")"; else reply '[]'; fi ;;
+  user/starred\?*)
+    date -u +%Y-%m-%dT%H:%M:%SZ >"$STUB_DIR/stars-read-at"
+    reply "$(cat "$STUB_DIR/starred.json")" ;;
+  *) echo "stub gh: unsupported path: $path" >&2; exit 1 ;;
+esac

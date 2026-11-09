@@ -3,5 +3,17 @@ worktrees/
 .DS_Store
 CLAUDE.local.md
 
+# star-chart working files belong in ~/.star-chart (STAR_CHART_DIR), never in a repo
+stars.json
+plan.json
+plan.md
+plan.rendered.json
+classification.json
+classification.prev.json
+changes-*.jsonl
+skills/star-chart/rules.md
+.star-chart/
+categories.approved.json
+
 # codex-review reports (skills/codex-review)
 .reviews/

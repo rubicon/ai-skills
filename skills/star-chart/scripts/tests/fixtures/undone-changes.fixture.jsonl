@@ -1,0 +1,4 @@
+{"ts":"2026-06-16T01:00:00Z","run_id":"U1","login":"example-user","op_key":"undo:D1/delete:UL_3","op":"undo_recreate_list","status":"started","undoes":"D1/delete:UL_3","old_id":"UL_3","name":"Parsing Libs"}
+{"ts":"2026-06-16T01:00:00Z","run_id":"U1","login":"example-user","op_key":"undo:D1/delete:UL_3","op":"undo_recreate_list","status":"ok","undoes":"D1/delete:UL_3","old_id":"UL_3","new_id":"UL_30"}
+{"ts":"2026-06-16T01:00:01Z","run_id":"U1","login":"example-user","op_key":"undo:R2/set:R_9","op":"undo_set_lists","status":"started","undoes":"R2/set:R_9"}
+{"ts":"2026-06-16T01:00:01Z","run_id":"U1","login":"example-user","op_key":"undo:R2/set:R_9","op":"undo_set_lists","status":"ok","undoes":"R2/set:R_9"}

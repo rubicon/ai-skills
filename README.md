@@ -28,7 +28,7 @@ skillshare install github.com/rubicon/ai-skills -s relocate-session
 skillshare install github.com/rubicon/ai-skills -s cache-money,codebase-memoir
 
 # Every skill published here
-skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memoir,codex-review,goalpost,grand-tour,identity-theft,relocate-session,right-stuff,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,work-evidence-research
+skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,codebase-memoir,codex-review,goalpost,grand-tour,identity-theft,relocate-session,right-stuff,rubicon-wordpress-version-lab,second-look,secret-santa-generator,showdown,star-chart,work-evidence-research
 ```
 
 ## Skills
@@ -49,6 +49,7 @@ skillshare install github.com/rubicon/ai-skills -s anger-translator,cache-money,
 | [anger-translator](skills/anger-translator/SKILL.md) | Turn a heated draft into a firm, professional message you can send at work — keeps the facts, the ask, and the consequences you stated; removes the heat; flags the political risk |
 | [codex-review](skills/codex-review/SKILL.md) | Get an independent code review from the Codex CLI: review a branch, uncommitted work, or one commit with invocations that work, and report the findings as advisory |
 | [right-stuff](skills/right-stuff/SKILL.md) | Ask the user through a pop-up question with two judgments on the option labels: `(Recommended)` for what the agent would pick, `(Right Thing)` for what a careful expert would pick even when it costs more |
+| [star-chart](skills/star-chart/SKILL.md) | Organize and clean up your GitHub stars: Claude consolidates your Lists into a tight set of categories and proposes assignments and unstars with reasons; you edit and approve the plan, then the exact calls, and every change is logged and can be undone |
 
 ## Plugins
 

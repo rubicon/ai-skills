@@ -1,0 +1,6 @@
+[
+  {"id": "UL_1", "name": "Parsers", "description": "Parsing libraries", "isPrivate": false, "items": [{"id": "R_1", "nameWithOwner": "example-org/fast-parser"}, {"id": "R_9", "nameWithOwner": "boundary/protect-edge"}]},
+  {"id": "UL_2", "name": "CLI Tools", "description": "", "isPrivate": true, "items": [{"id": "R_1", "nameWithOwner": "example-org/fast-parser"}, {"id": "R_2", "nameWithOwner": "example-org/old-cli"}]},
+  {"id": "UL_3", "name": "Parsing Libs", "description": "Overlaps Parsers", "isPrivate": false, "items": [{"id": "R_1", "nameWithOwner": "example-org/fast-parser"}, {"id": "R_3", "nameWithOwner": "sample-labs/legacy-sdk"}]},
+  {"id": "UL_4", "name": "Old Stuff", "description": "", "isPrivate": false, "items": []}
+]

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "generated_at": "2026-06-15T00:00:00Z",
+  "based_on_export": "2026-06-15T00:00:00Z",
+  "lists_to_create": [
+    {"name": "AI Agents", "description": "Agent frameworks | tools", "private": false, "reason": "Agent repos have no List yet"}
+  ],
+  "assignments": [
+    {"repo": "sample-labs/new-agent", "lists": ["AI Agents"], "reason": "Agent framework"},
+    {"repo": "example-org/fast-parser", "lists": ["parsers", "cli tools"], "reason": "Already filed, so no call"},
+    {"repo": "boundary/at-cutoff", "lists": ["CLI Tools", "AI Agents"], "reason": "Shell CLI used by agents"}
+  ],
+  "unstar": [
+    {"repo": "example-org/old-cli", "reason": "No push since 2023-01-01"}
+  ]
+}
