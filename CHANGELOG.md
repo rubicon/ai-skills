@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.4.0](https://github.com/rubicon/ai-skills/compare/v2.3.0...v2.4.0) (2026-11-09)
+
+
+### Features
+
+* add star-chart, a skill to organize and clean up GitHub stars ([#188](https://github.com/rubicon/ai-skills/issues/188)) ([e8cf776](https://github.com/rubicon/ai-skills/commit/e8cf776d7a0250add9fee011f2fd1e9b57cef3a6)), closes [#169](https://github.com/rubicon/ai-skills/issues/169)
+
 ## [2.3.0](https://github.com/rubicon/ai-skills/compare/v2.2.1...v2.3.0) (2026-11-07)
 
 
