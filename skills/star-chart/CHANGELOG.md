@@ -4,6 +4,13 @@ All notable changes to this skill are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The version tracks the `version:` field in `SKILL.md`.
 
+## [0.2.0](https://github.com/rubicon/ai-skills/compare/star-chart-v0.1.0...star-chart-v0.2.0) (2026-11-09)
+
+
+### Features
+
+* add star-chart, a skill to organize and clean up GitHub stars ([#188](https://github.com/rubicon/ai-skills/issues/188)) ([e8cf776](https://github.com/rubicon/ai-skills/commit/e8cf776d7a0250add9fee011f2fd1e9b57cef3a6)), closes [#169](https://github.com/rubicon/ai-skills/issues/169)
+
 ## [0.1.0] — 2026-10-18
 
 ### Added

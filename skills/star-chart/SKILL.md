@@ -1,6 +1,6 @@
 ---
 name: star-chart
-version: 0.1.0  # x-release-please-version
+version: 0.2.0  # x-release-please-version
 description: >-
   Use when the user wants to organize or clean up their GitHub stars: consolidate their GitHub
   Lists into a tight set of categories (rename, merge, delete), sort starred repos into Lists,
