@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.5.1](https://github.com/rubicon/ai-skills/compare/v2.5.0...v2.5.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **session-id-mod:** space the pill, bold the label and add a copy icon ([#206](https://github.com/rubicon/ai-skills/issues/206)) ([1cd203f](https://github.com/rubicon/ai-skills/commit/1cd203f9719548deda862b61d269303bb01e3408)), closes [#205](https://github.com/rubicon/ai-skills/issues/205)
+
 ## [2.5.0](https://github.com/rubicon/ai-skills/compare/v2.4.0...v2.5.0) (2026-11-10)
 
 
