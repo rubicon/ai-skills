@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.5.0](https://github.com/rubicon/ai-skills/compare/v2.4.0...v2.5.0) (2026-11-10)
+
+
+### Features
+
+* **session-id-mod:** show the session ID in the pill ([#202](https://github.com/rubicon/ai-skills/issues/202)) ([ca8331c](https://github.com/rubicon/ai-skills/commit/ca8331ce6b13b3f847d5ed62ef5e5cfa6f970630)), closes [#201](https://github.com/rubicon/ai-skills/issues/201)
+
 ## [2.4.0](https://github.com/rubicon/ai-skills/compare/v2.3.0...v2.4.0) (2026-11-09)
 
 
