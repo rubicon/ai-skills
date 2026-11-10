@@ -1,6 +1,6 @@
 {
   "name": "session-id-mod",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A copy icon above the prompt: click to copy this session's ID, hover to read it.",
   "author": {
     "name": "Dax Davis"
