@@ -130,7 +130,7 @@ test('on desktop the pill ends in a copy icon', async ($, on) => {
   expect(String(svgs[0].props?.source)).toContain('<svg')
 })
 
-test('on desktop one Button covers the whole pill and the only one drawn is keyed copy', async ($, on) => {
+test('on desktop one Button with a pill-wide label lies over the pill, and the pill clips it', async ($, on) => {
   seed(on)
   const tree = await pillTree($, 'desktop')
   const buttons: Array<{ node: Node; ancestors: Node[] }> = []
@@ -139,13 +139,22 @@ test('on desktop one Button covers the whole pill and the only one drawn is keye
   })
 
   expect(buttons).toHaveLength(1)
-  const { ancestors } = buttons[0]
+  const { node: button, ancestors } = buttons[0]
+  expect(button.props?.key).toBe('copy')
+
+  // A desktop Button is sized to its label and ignores the Box around it, so the label is
+  // many non-breaking spaces: wider than any pill, invisible, and clipped by the pill.
+  const label = button.props?.label ?? button.children?.[0]
+  expect(typeof label).toBe('string')
+  expect(String(label)).toMatch(/^\u00a0{200}$/)
+
   const cover = ancestors[ancestors.length - 1]
   expect(cover.props?.position).toBe('absolute')
-  // Spanned by its four edges: the types give no meaning to a percentage width or height on a Box.
   expect([cover.props?.top, cover.props?.left, cover.props?.right, cover.props?.bottom]).toEqual([0, 0, 0, 0])
-  expect(cover.props?.width).toBeUndefined()
-  expect(cover.props?.height).toBeUndefined()
+
+  const pill = ancestors[ancestors.length - 2]
+  expect(pill.props?.overflow).toBe('hidden')
+  expect(pill.props?.borderStyle).toBe('round')
 })
 
 test('the pill is inset from the left edge and spaced from its neighbours on desktop', async ($, on) => {
