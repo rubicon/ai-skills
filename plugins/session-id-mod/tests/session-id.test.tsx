@@ -34,11 +34,13 @@ test('pressing the pill copies the session id alone, not the label', async ($, o
     return { value: { isCopied: true } }
   })
 
-  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  await ui.press({ key: 'copy' })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...BAND, surface })
+    await ui.press({ key: 'copy' })
+    await ui.unmount()
+  }
 
-  expect(copied).toEqual(['abc-123'])
-  await ui.unmount()
+  expect(copied).toEqual(['abc-123', 'abc-123'])
 })
 
 type Node = {
@@ -140,8 +142,10 @@ test('on desktop one Button covers the whole pill and the only one drawn is keye
   const { ancestors } = buttons[0]
   const cover = ancestors[ancestors.length - 1]
   expect(cover.props?.position).toBe('absolute')
-  expect(cover.props?.width).toBe('100%')
-  expect(cover.props?.height).toBe('100%')
+  // Spanned by its four edges: the types give no meaning to a percentage width or height on a Box.
+  expect([cover.props?.top, cover.props?.left, cover.props?.right, cover.props?.bottom]).toEqual([0, 0, 0, 0])
+  expect(cover.props?.width).toBeUndefined()
+  expect(cover.props?.height).toBeUndefined()
 })
 
 test('the pill is inset from the left edge and spaced from its neighbours on desktop', async ($, on) => {

@@ -41,7 +41,7 @@ export const register: Register = on => {
             <Text weight="semibold">Session ID:</Text>
             <Text italic mono>{id}</Text>
             <Svg key="icon" source={COPY_ICON} alt="Copy session ID" width={ICON_SIZE} height={ICON_SIZE} />
-            <Box position="absolute" top={0} left={0} width="100%" height="100%">
+            <Box position="absolute" top={0} left={0} right={0} bottom={0}>
               <Button key="copy" plain onPress={copy}>{' '}</Button>
             </Box>
             {/* No key: a keyed Box scopes its own hover, and a hidden one is never hovered. Absolute, so showing it moves nothing. */}
