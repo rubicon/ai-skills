@@ -22,5 +22,5 @@
   "plugins/session-messaging": "0.2.0",
   "plugins/outbound-review-gate": "0.1.0",
   "plugins/right-stuff-guard": "0.1.0",
-  "plugins/session-id-mod": "0.3.0"
+  "plugins/session-id-mod": "0.3.1"
 }
