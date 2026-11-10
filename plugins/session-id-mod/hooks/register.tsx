@@ -33,7 +33,7 @@ export const register: Register = on => {
               $.ui.toast(isCopied ? 'Session ID copied' : `Could not copy the session ID (${reason})`)
             }}
           >
-            <Text size="title" color="#ffffff">#</Text>
+            <Text color="#ffffff"><Text weight="bold">Session ID:</Text> {id}</Text>
           </Button>
           {/* No key: a keyed Box scopes its own hover, and a hidden one is never hovered. Absolute, so showing it moves nothing. */}
           <Box
@@ -49,8 +49,7 @@ export const register: Register = on => {
             borderColor="subtle"
             backgroundColor="background"
           >
-            <Text>{id}</Text>
-            <Text dimColor>Click the icon to copy</Text>
+            <Text dimColor>Click to copy</Text>
           </Box>
         </Box>
         {below}
