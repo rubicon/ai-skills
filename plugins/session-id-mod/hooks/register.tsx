@@ -38,11 +38,11 @@ export const register: Register = on => {
               borderColor="rgba(47,104,192,0.28)"
               backgroundColor="rgba(47,104,192,0.10)"
             >
-              {/* The desktop draws a Button as a native control that flattens its text's styling and sizes it to its label, and a Button cannot hold an Svg. So the label, the id and the icon are plain elements, and one Button lies over the whole pill to take the press. Its label is many non-breaking spaces, wider than any pill: invisible, and clipped by the pill. */}
+              {/* The desktop draws a Button as a native control that flattens its text's styling and sizes it to its label, and a Button cannot hold an Svg. So the label, the id and the icon are plain elements, and one Button lies over the whole pill to take the press. Its label is many non-breaking spaces, wider than any pill: invisible, and clipped by the pill. The Box reaches 4 cells past the pill's right edge so that the "..." the desktop draws where it cuts the label off falls outside the clip. */}
               <Text weight="semibold">Session ID:</Text>
               <Text italic mono>{id}</Text>
               <Svg key="icon" source={COPY_ICON} alt="Copy session ID" width={ICON_SIZE} height={ICON_SIZE} />
-              <Box position="absolute" top={0} left={0} right={0} bottom={0}>
+              <Box position="absolute" top={0} left={0} right={-4} bottom={0}>
                 <Button key="copy" plain onPress={copy}>{COVER_LABEL}</Button>
               </Box>
             </Box>

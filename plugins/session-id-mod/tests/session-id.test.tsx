@@ -150,7 +150,8 @@ test('on desktop one Button with a pill-wide label lies over the pill, and the p
 
   const cover = ancestors[ancestors.length - 1]
   expect(cover.props?.position).toBe('absolute')
-  expect([cover.props?.top, cover.props?.left, cover.props?.right, cover.props?.bottom]).toEqual([0, 0, 0, 0])
+  // It reaches past the pill's right edge so that the "..." the desktop draws where it cuts the label off falls outside the clip.
+  expect([cover.props?.top, cover.props?.left, cover.props?.right, cover.props?.bottom]).toEqual([0, 0, -4, 0])
 
   const pill = ancestors[ancestors.length - 2]
   expect(pill.props?.overflow).toBe('hidden')
