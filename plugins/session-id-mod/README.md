@@ -16,7 +16,7 @@ Requires a Claude Code release that runs mods (2.1.294 or later). Start a new se
 ## Behavior and limits
 
 - The pill sits above the prompt and reads `Session ID:` in a semibold weight, then the full session ID. Clicking it copies the ID alone, without the label.
-- On the desktop app the pill is inset from the left edge with space above and below it, matching Token Weather Usage's pills. The ID is italic in a monospaced face and a copy icon ends the pill. A desktop Button cannot hold an icon or keep its text styling, so those are plain elements and one Button lies over the whole pill to take the click.
+- On the desktop app the pill is inset from the left edge with space above and below it, matching Token Weather Usage's pills. The ID is italic in a monospaced face and a copy icon ends the pill. A desktop Button cannot hold an icon or keep its text styling, so those are plain elements and one Button lies over the whole pill to take the click. The desktop sizes a Button to its label, so that Button's label is a long run of invisible non-breaking spaces, and the pill clips it to its own edge. The cover reaches a few cells past the pill's right edge so that the ellipsis the desktop draws where it cuts that label off is clipped away too.
 - On the terminal the label and the ID sit inside a single Button, with no icon and no italics.
 - Hovering over the pill shows a small "Click to copy" hint above it. The hint floats, so showing it moves nothing else. Mods have no native tooltip, so it is a hover-revealed box, and on a terminal the hover works only where the terminal reports mouse movement.
 - The mod reads the session ID and writes to the clipboard through the mod API. It reads no files, runs no programs and uses no network.
