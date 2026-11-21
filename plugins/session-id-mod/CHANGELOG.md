@@ -5,6 +5,13 @@ All notable changes to this plugin are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [0.3.2](https://github.com/rubicon/ai-skills/compare/session-id-mod-v0.3.1...session-id-mod-v0.3.2) (2026-11-15)
+
+
+### Bug Fixes
+
+* **session-id-mod:** make the whole pill clickable on desktop ([#210](https://github.com/rubicon/ai-skills/issues/210)) ([ebe9c6d](https://github.com/rubicon/ai-skills/commit/ebe9c6dbc30458e8aacb8ffae5ad1b0629f449b8)), closes [#209](https://github.com/rubicon/ai-skills/issues/209)
+
 ## [0.3.1](https://github.com/rubicon/ai-skills/compare/session-id-mod-v0.3.0...session-id-mod-v0.3.1) (2026-11-10)
 
 
