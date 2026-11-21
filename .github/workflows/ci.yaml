@@ -80,6 +80,17 @@ jobs:
           python3 skills/identity-theft/scripts/validate_dossier.py \
             skills/identity-theft/references/personalities/
 
+  secret-santa-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: secret-santa-generator draw script test suite
+        run: |
+          cd skills/secret-santa-generator/scripts/tests
+          python3 -m unittest -v
+
   star-chart-tests:
     # macOS too: it ships Bash 3.2, which the scripts must run on.
     strategy:
