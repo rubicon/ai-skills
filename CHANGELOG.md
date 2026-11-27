@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions use [Semantic Versioning](https://semver.org/).
 
+## [2.6.0](https://github.com/rubicon/ai-skills/compare/v2.5.2...v2.6.0) (2026-11-27)
+
+
+### Features
+
+* **secret-santa-generator:** uniform scripted draw with optional no-mutual-pairs ([#215](https://github.com/rubicon/ai-skills/issues/215)) ([2f8471f](https://github.com/rubicon/ai-skills/commit/2f8471f199f2a1a4173e1366ebc5573671a1e0e0))
+
 ## [2.5.2](https://github.com/rubicon/ai-skills/compare/v2.5.1...v2.5.2) (2026-11-15)
 
 
